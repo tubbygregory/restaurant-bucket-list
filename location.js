@@ -7,6 +7,7 @@ const nearMe = document.getElementById('near-me');
 let locationRequest = 0;
 let lastPlaceSearch = 0;
 const placeCache = new Map();
+let searchCircle = null;
 
 function setLocation(coords, label) {
   if (!resolveCoordinates({ latitude: coords.lat, longitude: coords.lon })) {
@@ -23,7 +24,9 @@ function setLocation(coords, label) {
 }
 
 function focusLocation() {
-  const bounds = L.circle([locationOrigin.lat, locationOrigin.lon], { radius: Number(document.getElementById('radius').value || 10) * 1609.344 }).getBounds();
+  if (searchCircle) map.removeLayer(searchCircle);
+  searchCircle = L.circle([locationOrigin.lat, locationOrigin.lon], { radius: Number(document.getElementById('radius').value || 10) * 1609.344, color: '#164e43', weight: 1, fillOpacity: 0.04 }).addTo(map);
+  const bounds = searchCircle.getBounds();
   map.fitBounds(bounds, { paddingTopLeft: [window.innerWidth > 600 ? 400 : 20, 20], paddingBottomRight: [20, 20], maxZoom: 14 });
 }
 
@@ -97,6 +100,8 @@ document.getElementById('radius').addEventListener('change', () => {
 document.getElementById('clear-location').addEventListener('click', () => {
   ++locationRequest;
   locationOrigin = null;
+  if (searchCircle) map.removeLayer(searchCircle);
+  searchCircle = null;
   if (originMarker) map.removeLayer(originMarker);
   originMarker = null;
   locationStatus.textContent = '';

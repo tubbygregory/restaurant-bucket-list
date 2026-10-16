@@ -64,7 +64,7 @@ test('place lookup, permission denial and clearing location',async()=>{
  a.context.URLSearchParams=URLSearchParams;
  a.context.navigator={geolocation:{getCurrentPosition(success,failure){failure({code:1});}}};
  a.context.fetch=async url=>{assert.equal(url.hostname,'nominatim.openstreetmap.org');assert.equal(url.searchParams.get('q'),'London');return {ok:true,json:async()=>[{display_name:'London <test>',lat:'51.5',lon:'-0.1'}]};};
- a.context.L.circle=()=>({getBounds(){return [];}});
+ a.context.L.circle=()=>({addTo(){return this;},getBounds(){return [];}});
  a.context.L.circleMarker=()=>({addTo(){return this;},bindPopup(){return this;}});
  a.run(fs.readFileSync('location.js','utf8'));
  a.run("document.getElementById('place').value='London'");await a.elements['location-form'].handlers.submit({preventDefault(){}});
