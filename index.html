@@ -145,7 +145,7 @@
         <button id="clear-location" type="button" hidden>Clear location</button>
       </div>
       <label for="radius">Search radius</label>
-      <select id="radius"><option value="5">5 miles</option><option value="10" selected>10 miles</option><option value="25">25 miles</option><option value="50">50 miles</option></select>
+      <select id="radius"><option value="5">5 miles</option><option value="10" selected>10 miles</option><option value="25">25 miles</option><option value="50">50 miles</option><option value="all">Any distance</option></select>
       <div id="location-status" role="status" aria-live="polite"></div>
       <div class="location-credit">Place search: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a>. Only submitted place searches are sent to Nominatim. Device location stays here unless you explicitly include it in a shared link.</div>
     </div>
@@ -176,7 +176,9 @@
       <h2 id="results-heading" tabindex="-1">Pick your next meal</h2>
       <div class="actions"><button type="button" data-view="filters">Edit filters</button><button type="button" class="primary" data-view="map">View map</button></div>
       <div class="actions"><button id="pick-restaurant" type="button">Pick somewhere for me</button><button id="share-shortlist" type="button">Share these filters</button></div>
-      <label for="sort-results">Sort restaurants<select id="sort-results"><option value="auto">Recommended order</option><option value="name">Name A–Z</option><option value="nearest">Nearest first</option><option value="priority">Highest priority</option><option value="price">Price: low to high</option></select></label>
+      <label for="sort-results">Sort restaurants<select id="sort-results"><option value="auto">Recommended order</option><option value="name">Restaurant name</option><option value="nearest">Distance from chosen location</option><option value="priority">Priority</option><option value="price">Price</option><option value="cuisine">Cuisine</option><option value="city">City / location</option><option value="area">Neighbourhood</option></select></label>
+      <label for="sort-direction">Sort direction<select id="sort-direction"><option value="asc">Ascending</option><option value="desc">Descending</option></select></label>
+      <p class="muted">Distance uses the place selected in Find or Near me. Choose Any distance to order the whole list. Missing values stay at the end in either direction.</p>
       <div id="discovery-message" role="status" aria-live="polite"></div>
       <section id="share-panel" hidden aria-label="Share link"><button id="close-share" type="button" class="text-button">Close sharing</button><h3>Share a shortlist</h3><p>Only public filters are shared. Your notes, ratings, favourites and visited status are never included.</p>
         <label class="check-label"><input id="share-location" type="checkbox"> Include nearby centre / map area (reveals that location)</label>
@@ -406,7 +408,8 @@
         if (typeof matchesPersonal === 'function' && !matchesPersonal(item)) continue;
         if (mapBoundsFilter && item.coords && typeof inMapBounds === 'function' && !inMapBounds(item.coords, mapBoundsFilter)) continue;
         const distance = locationOrigin && item.coords ? distanceMiles(locationOrigin, item.coords) : null;
-        if (distance !== null && distance > Number(document.getElementById('radius').value || 10)) continue;
+        const radius = Number(document.getElementById('radius').value || 10);
+        if (distance !== null && Number.isFinite(radius) && distance > radius) continue;
         visible += 1;
         if (!item.coords) {
           unmapped += 1;

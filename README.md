@@ -32,7 +32,7 @@ Explore restaurants initially shows 30 matches; Load more adds the next 30 until
 
 Installed apps show an Update app button when a new service worker is waiting. Click it to activate and reload; an ordinary first install does not force a reload. Automated accessibility checks can be included in browser tests with `AXE_PATH=/path/to/axe.min.js node tests/browser.cjs`. See `AUDIT.md` for audit scope, evidence and remaining limitations.
 
-Navigation state uses URL fragments under the existing repository path. `navigation.js` manages the visible view, heading focus and map resizing; the service worker caches it and normalises navigation fragments for offline reload. The app cache is now v4. Navigation tests check that the map occupies more than 65% of each tested viewport, with controls entirely off the map screen.
+Navigation state uses URL fragments under the existing repository path. `navigation.js` manages the visible view, heading focus and map resizing; the service worker caches it and normalises navigation fragments for offline reload. The app cache is now v5. Navigation tests check that the map occupies more than 65% of each tested viewport, with controls entirely off the map screen.
 
 ## Personal collection and discovery
 
@@ -45,3 +45,9 @@ Search this map area captures the visible map bounds and respects other filters.
 Share these filters creates a link containing text/category filters and sorting. Personal collection filters, notes, ratings and favourites are omitted. Nearby centre/map area are excluded by default; explicitly checking Include location puts those coordinates into the shared URL. Restaurant links identify a public spreadsheet record and never contain personal metadata. Links read the current live sheet when opened; changed or removed records/filters are reported. Share and Copy buttons use browser APIs with manual-copy fallback. Sharing does not send a message until the user uses their browser’s sharing UI.
 
 Run `node tests/features-browser.cjs` in addition to the navigation browser tests for personal persistence, shuffle, sorting, all-results pagination, recipient privacy, shared deep links, visible-area search and offline details. Use the same APP_URL, CHROMIUM_PATH and optional AXE_PATH settings as the other browser suite.
+
+## Sort categories and direction
+
+Results has separate Sort restaurants and Sort direction controls. Name, cuisine, city/location, neighbourhood and priority support A–Z / Z–A; price supports low-to-high / high-to-low; distance supports nearest / farthest. Unknown prices, empty categories and records without coordinates stay last in both directions, with name A–Z as a stable tie-break. Price compares the sheet’s £–££££ categories, not an invented monetary amount.
+
+Distance uses the place or Near me location selected in Find and is straight-line distance. Select Any distance in Find to include the whole list rather than just a 5–50 mile radius. Missing-location attempts explain how to choose a reference point. Shared filter links preserve category and direction; older links default to ascending. Location sharing remains opt-in.
