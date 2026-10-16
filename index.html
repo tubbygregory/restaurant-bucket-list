@@ -17,28 +17,31 @@
   <link rel="stylesheet" href="./vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="./vendor/leaflet.markercluster/MarkerCluster.css">
   <link rel="stylesheet" href="./vendor/leaflet.markercluster/MarkerCluster.Default.css">
+  <script src="./theme.js"></script>
   <style>
-    :root { color-scheme: light; --ink: #173f36; --muted: #59665f; --line: #d9dfd6; --paper: #faf9f4; --accent: #a04c2c; }
+    :root { color-scheme: light; --ink: #173f36; --muted: #59665f; --line: #d9dfd6; --paper: #faf9f4; --accent: #a04c2c; --surface: #fff; --hover: #edf1e9; --primary: #173f36; --on-primary: #fff; --primary-hover: #245d50; --focus: #a04c2c; --link: #245c4d; --error: #923d26; --notice: #f3e9df; --map: #e5ebe4; --cluster: #c9d8c9; --control-border: #aebdb0; }
+    :root[data-theme="dark"] { color-scheme: dark; --ink: #edf4ef; --muted: #b5c5bd; --line: #60776c; --paper: #14221d; --accent: #ffb48e; --surface: #21362d; --hover: #304c3f; --primary: #b5dfcb; --on-primary: #10261c; --primary-hover: #d5f5e4; --focus: #ffc49f; --link: #b5dfcb; --error: #ffbaaa; --notice: #422f24; --map: #263b32; --cluster: #365f4d; --control-border: #80998c; }
+    :root[data-theme="contrast"] { color-scheme: dark; --ink: #fff; --muted: #fff; --line: #fff; --paper: #000; --accent: #ffff00; --surface: #000; --hover: #222; --primary: #ffff00; --on-primary: #000; --primary-hover: #fff; --focus: #00ffff; --link: #ffff00; --error: #ffbbaa; --notice: #000; --map: #000; --cluster: #fff; --control-border: #fff; }
     * { box-sizing: border-box; }
     html, body { height: 100%; margin: 0; }
     body { display: grid; grid-template-columns: 380px minmax(0, 1fr); font: 14px/1.5 system-ui, -apple-system, sans-serif; color: var(--ink); background: var(--paper); }
-    #map { height: 100%; min-width: 0; background: #e5ebe4; }
+    #map { height: 100%; min-width: 0; background: var(--map); }
     .panel { z-index: 1000; padding: 26px 22px 18px; overflow-y: auto; height: 100dvh; background: var(--paper); border-right: 1px solid var(--line); }
     .eyebrow { text-transform: uppercase; letter-spacing: .15em; font-size: 10px; font-weight: 800; color: var(--accent); margin: 0 0 8px; }
     h1 { font: 500 31px/1.08 Georgia, serif; letter-spacing: -.8px; margin: 0; max-width: 280px; }
     .intro { color: var(--muted); margin: 12px 0 20px; font-size: 13px; }
     .match-summary { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
     .search-label { font-size: 12px; font-weight: 700; }
-    input, select, button, .sheet-link { width: 100%; min-height: 44px; font: inherit; border: 1px solid var(--line); border-radius: 9px; background: white; color: var(--ink); padding: 10px 12px; }
+    input, select, button, .sheet-link { width: 100%; min-height: 44px; font: inherit; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--ink); padding: 10px 12px; }
     input, select { margin: 4px 0 0; }
     select { text-overflow: ellipsis; }
-    input[type=search] { background: white; border-color: #aebdb0; }
+    input[type=search] { background: var(--surface); border-color: var(--control-border); }
     button { cursor: pointer; font-weight: 650; }
-    button:hover, .sheet-link:hover { background: #edf1e9; border-color: #9faf9f; }
+    button:hover, .sheet-link:hover { background: var(--hover); border-color: var(--control-border); }
     button:disabled { cursor: wait; opacity: .65; }
-    :focus-visible { outline: 3px solid #b5623d; outline-offset: 3px; }
-    .primary { background: var(--ink); color: white; border-color: var(--ink); }
-    .primary:hover { background: #245d50; color: white; }
+    :focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+    .primary { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+    .primary:hover { background: var(--primary-hover); color: var(--on-primary); }
     .actions, .filter-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; }
     .actions { margin-top: 10px; }
     #filter-count { font-weight: 400; color: var(--muted); }
@@ -58,24 +61,34 @@
     #place-results button { margin-top: 8px; text-align: left; font-size: 13px; overflow-wrap: anywhere; }
     .location-credit, .muted { color: var(--muted); font-size: 11px; line-height: 1.55; margin-top: 10px; }
     #location-status { font-size: 12px; margin-top: 6px; }
-    a { color: #245c4d; text-underline-offset: 3px; }
+    a { color: var(--link); text-underline-offset: 3px; }
     .status { font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); padding: 14px 0 0; margin-top: 18px; }
-    .status.loading::before { content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 7px; border: 2px solid #d4ded2; border-top-color: var(--ink); border-radius: 50%; animation: spin .8s linear infinite; }
-    .status.error { color: #923d26; }
-    #empty-state { margin-top: 14px; padding: 12px; background: #f3e9df; border-radius: 9px; font-size: 13px; }
+    .status.loading::before { content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 7px; border: 2px solid var(--line); border-top-color: var(--ink); border-radius: 50%; animation: spin .8s linear infinite; }
+    .status.error { color: var(--error); }
+    #empty-state { margin-top: 14px; padding: 12px; background: var(--notice); border-radius: 9px; font-size: 13px; }
     .nearby-list { list-style: none; padding: 0; margin: 0; }
-    .restaurant-card { border: 1px solid var(--line); border-radius: 12px; background: white; padding: 14px; margin-top: 10px; font-size: 12px; overflow-wrap: anywhere; }
+    .restaurant-card { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 14px; margin-top: 10px; font-size: 12px; overflow-wrap: anywhere; }
     .restaurant-card strong { font: 600 17px/1.3 Georgia, serif; }
-    .restaurant-card button { margin-top: 10px; background: #eef2e9; font-size: 12px; }
-    .unmapped-note { color: #923d26; font-size: 11px; margin: 8px 0 0; }
+    .restaurant-card button { margin-top: 10px; background: var(--hover); font-size: 12px; }
+    .unmapped-note { color: var(--error); font-size: 11px; margin: 8px 0 0; }
     #results-note { font-size: 11px; color: var(--muted); margin: 0 0 8px; }
     .leaflet-popup-content { line-height: 1.65; color: var(--ink); overflow-wrap: anywhere; }
     .leaflet-popup-content strong { font-size: 16px; }
-    .leaflet-popup-content a { display: inline-block; padding: 5px 0; }
+    .leaflet-container .leaflet-popup-content a { color: var(--link); display: inline-block; padding: 5px 0; }
     .leaflet-control-attribution a { text-decoration: underline; }
     .leaflet-popup-content-wrapper { border-radius: 12px; }
-    .marker-cluster-small, .marker-cluster-medium, .marker-cluster-large { background: #c9d8c9; }
-    .marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div { background: var(--ink); color: white; font-weight: 750; }
+    .marker-cluster-small, .marker-cluster-medium, .marker-cluster-large { background: var(--cluster); }
+    .marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div { background: var(--primary); color: var(--on-primary); font-weight: 750; }
+    input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
+    input { accent-color: var(--primary); }
+    .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--surface); color: var(--ink); }
+    .leaflet-container a.leaflet-popup-close-button { color: var(--ink); }
+    .leaflet-bar a, .leaflet-bar a:hover, .leaflet-container .leaflet-control-attribution { background: var(--surface); color: var(--ink); }
+    .leaflet-bar a:hover { background: var(--hover); }
+    .leaflet-bar a, .leaflet-bar { border-color: var(--control-border); }
+    .leaflet-container .leaflet-control-attribution a { color: var(--link); }
+    :root[data-theme="contrast"] .restaurant-card, :root[data-theme="contrast"] #empty-state, :root[data-theme="contrast"] .leaflet-popup-content-wrapper { border: 2px solid var(--line); }
+    #appearance { margin-top: 18px; }
     #update-app { margin-top: 10px; }
     @keyframes spin { to { transform: rotate(360deg); } }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; scroll-behavior: auto !important; } }
@@ -94,12 +107,12 @@
     h3 { font-size: 14px; margin: 24px 0 12px; }
     .search-steps { display: flex; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
     .search-steps button { min-width: 0; font-size: 12px; padding: 8px; }
-    [aria-current="step"], .bottom-nav [aria-current="page"] { background: var(--ink); color: white; border-color: var(--ink); }
+    [aria-current="step"], .bottom-nav [aria-current="page"] { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
     .bottom-nav { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 6px; padding: 8px 12px max(8px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--paper); }
     .bottom-nav button { font-size: 12px; border-color: transparent; }
     .check-label { display: flex; align-items: center; gap: 10px; margin: 14px 0; min-height: 44px; }
     .check-label input { width: 20px; min-height: 20px; height: 20px; margin: 0; }
-    textarea { width: 100%; font: inherit; padding: 12px; border: 1px solid var(--line); border-radius: 9px; margin-top: 4px; }
+    textarea { color: var(--ink); background: var(--surface); width: 100%; font: inherit; padding: 12px; border: 1px solid var(--line); border-radius: 9px; margin-top: 4px; }
     #personal-form label, #sort-results, #share-link { margin-top: 12px; }
     #share-panel { padding: 16px; border: 1px solid var(--line); border-radius: 12px; margin-top: 16px; }
     #restaurant-details { font-size: 15px; line-height: 1.8; }
@@ -212,6 +225,10 @@
     </section>
     <section id="view-more" class="view" hidden aria-labelledby="more-heading">
       <h2 id="more-heading" tabindex="-1">App &amp; data</h2>
+      <label id="appearance" for="colour-mode">Colour mode</label>
+      <select id="colour-mode" aria-describedby="colour-mode-help"><option value="device">Match device</option><option value="light">Light</option><option value="dark">Dark</option><option value="contrast">High contrast</option></select>
+      <p id="colour-mode-help" class="muted">Match device follows your device’s colour scheme and increased contrast preference. Your choice is saved on this device.</p>
+      <p id="colour-mode-status" class="muted" role="status"></p>
       <p class="muted">Your favourites, visited status, ratings and notes are stored only in this browser. Clearing site data or changing device removes them. There is no account or cross-device sync.</p>
     <div class="actions">
       <button id="refresh" type="button">Refresh data</button>
@@ -443,8 +460,11 @@
           button.type = 'button';
           button.textContent = distance === null ? `Show ${item.name} on map` : `${item.name} · ${distance.toFixed(1)} miles`;
           button.addEventListener('click', () => {
-            if (typeof showView === 'function') showView('map');
-            group.zoomToShowLayer(marker, () => marker.openPopup());
+            if (typeof showRestaurantMap === 'function') showRestaurantMap(item);
+            else {
+              if (typeof showView === 'function') showView('map');
+              group.zoomToShowLayer(marker, () => marker.openPopup());
+            }
           });
           li.appendChild(button);
         } else {

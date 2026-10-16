@@ -1,6 +1,6 @@
 'use strict';
-const CACHE = 'restaurant-bucket-list-v7';
-const SHELL = ['./', './index.html', './location.js', './navigation.js', './features.js', './install.js', './manifest.webmanifest', './icons/favicon.ico', './icons/favicon-32.png', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-512.png', './icons/apple-touch-icon.png'];
+const CACHE = 'restaurant-bucket-list-v8';
+const SHELL = ['./', './index.html', './location.js', './navigation.js', './features.js', './install.js', './theme.js', './manifest.webmanifest', './icons/favicon.ico', './icons/favicon-32.png', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-512.png', './icons/apple-touch-icon.png'];
 const ASSETS = [...SHELL, './vendor/leaflet/leaflet.css', './vendor/leaflet/leaflet.js',
   './vendor/leaflet/images/marker-icon.png', './vendor/leaflet/images/marker-icon-2x.png',
   './vendor/leaflet/images/marker-shadow.png', './vendor/leaflet/images/layers.png', './vendor/leaflet/images/layers-2x.png',
