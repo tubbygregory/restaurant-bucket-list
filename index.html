@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
 
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="An interactive restaurant bucket-list map, updated from Google Sheets.">
   <meta name="theme-color" content="#164e43">
@@ -15,78 +16,108 @@
   <link rel="stylesheet" href="./vendor/leaflet.markercluster/MarkerCluster.css">
   <link rel="stylesheet" href="./vendor/leaflet.markercluster/MarkerCluster.Default.css">
   <style>
-    :root { color-scheme: light; }
+    :root { color-scheme: light; --ink: #173f36; --muted: #59665f; --line: #d9dfd6; --paper: #faf9f4; --accent: #a04c2c; }
     * { box-sizing: border-box; }
-    html, body, #map { height: 100%; margin: 0; }
-    body { font-family: Arial, Helvetica, sans-serif; }
-    #map { background: #e7ecef; }
-    .panel {
-      position: absolute;
-      z-index: 1000;
-      top: 12px;
-      left: 50px;
-      width: min(340px, calc(100vw - 62px));
-      background: rgba(255,255,255,.97);
-      padding: 12px;
-      border-radius: 10px;
-      box-shadow: 0 2px 12px rgba(0,0,0,.28);
-      font-size: 14px;
-      max-height: calc(100dvh - 24px);
-      overflow-y: auto;
-    }
-    .title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
-    .title { font-size: 17px; font-weight: 700; }
-    input, select, button, .sheet-link {
-      width: 100%;
-      min-height: 44px;
-      margin: 4px 0;
-      padding: 8px 10px;
-      border: 1px solid #b8bec4;
-      border-radius: 6px;
-      background: white;
-      color: #202124;
-      font: inherit;
-    }
-    button { cursor: pointer; font-weight: 600; }
-    button:hover { background: #f1f3f4; }
-    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
-    .sheet-link { display: flex; align-items: center; justify-content: center; text-decoration: none; font-weight: 600; }
+    html, body { height: 100%; margin: 0; }
+    body { display: grid; grid-template-columns: 380px minmax(0, 1fr); font: 14px/1.5 system-ui, -apple-system, sans-serif; color: var(--ink); background: var(--paper); }
+    #map { height: 100%; min-width: 0; background: #e5ebe4; }
+    .panel { z-index: 1000; padding: 26px 22px 18px; overflow-y: auto; height: 100dvh; background: var(--paper); border-right: 1px solid var(--line); }
+    .eyebrow { text-transform: uppercase; letter-spacing: .15em; font-size: 10px; font-weight: 800; color: var(--accent); margin: 0 0 8px; }
+    h1 { font: 500 31px/1.08 Georgia, serif; letter-spacing: -.8px; margin: 0; max-width: 280px; }
+    .intro { color: var(--muted); margin: 12px 0 20px; font-size: 13px; }
+    .match-summary { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+    .search-label { font-size: 12px; font-weight: 700; }
+    input, select, button, .sheet-link { width: 100%; min-height: 44px; font: inherit; border: 1px solid var(--line); border-radius: 9px; background: white; color: var(--ink); padding: 10px 12px; }
+    input, select { margin: 4px 0 0; }
+    select { text-overflow: ellipsis; }
+    input[type=search] { background: white; border-color: #aebdb0; }
+    button { cursor: pointer; font-weight: 650; }
+    button:hover, .sheet-link:hover { background: #edf1e9; border-color: #9faf9f; }
+    button:disabled { cursor: wait; opacity: .65; }
+    :focus-visible { outline: 3px solid #b5623d; outline-offset: 3px; }
+    .primary { background: var(--ink); color: white; border-color: var(--ink); }
+    .primary:hover { background: #245d50; color: white; }
+    .actions, .filter-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; }
+    .actions { margin-top: 10px; }
+    #filter-count { font-weight: 400; color: var(--muted); }
+    .filter-grid label { min-width: 0; }
+    .filter-wide { grid-column: 1 / -1; }
+    label { display: block; font-size: 12px; font-weight: 650; }
+    .sheet-link { display: flex; align-items: center; justify-content: center; text-decoration: none; font-weight: 650; }
     [hidden] { display: none !important; }
-    label { display: block; margin-top: 6px; font-weight: 600; }
-    .nearby-list { padding-left: 22px; font-size: 13px; }
-    .nearby-list button { text-align: left; font-weight: normal; }
-    .location-credit { font-size: 11px; }
-    .muted { margin-top: 7px; color: #5f6368; font-size: 11px; line-height: 1.35; }
-    .status { margin-top: 7px; padding-top: 7px; border-top: 1px solid #e0e0e0; font-size: 12px; line-height: 1.35; }
-    .status.loading::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 6px; border: 2px solid #c4c7c5; border-top-color: #1a73e8; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -1px; }
-    .status.error { color: #b3261e; }
+    details { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 14px; }
+    summary { cursor: pointer; font-size: 13px; font-weight: 700; min-height: 44px; }
+    details[open] > summary { margin-bottom: 10px; }
+    .filters-heading { display: flex; align-items: baseline; justify-content: space-between; margin: 0 0 10px; }
+    h2 { font-size: 13px; margin: 0; }
+    .text-button { width: auto; min-height: 44px; padding: 6px 8px; border: 0; background: none; color: var(--accent); font-size: 12px; }
+    #location-form button { margin-top: 8px; }
+    #radius { margin-bottom: 8px; }
+    #place-results button { margin-top: 8px; text-align: left; font-size: 13px; overflow-wrap: anywhere; }
+    .location-credit, .muted { color: var(--muted); font-size: 11px; line-height: 1.55; margin-top: 10px; }
+    #location-status { font-size: 12px; margin-top: 6px; }
+    a { color: #245c4d; text-underline-offset: 3px; }
+    .status { font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); padding: 14px 0 0; margin-top: 18px; }
+    .status.loading::before { content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 7px; border: 2px solid #d4ded2; border-top-color: var(--ink); border-radius: 50%; animation: spin .8s linear infinite; }
+    .status.error { color: #923d26; }
+    #empty-state { margin-top: 14px; padding: 12px; background: #f3e9df; border-radius: 9px; font-size: 13px; }
+    .nearby-list { list-style: none; padding: 0; margin: 0; }
+    .restaurant-card { border: 1px solid var(--line); border-radius: 12px; background: white; padding: 14px; margin-top: 10px; font-size: 12px; overflow-wrap: anywhere; }
+    .restaurant-card strong { font: 600 17px/1.3 Georgia, serif; }
+    .restaurant-card button { margin-top: 10px; background: #eef2e9; font-size: 12px; }
+    .unmapped-note { color: #923d26; font-size: 11px; margin: 8px 0 0; }
+    #results-note { font-size: 11px; color: var(--muted); margin: 0 0 8px; }
+    .leaflet-popup-content { line-height: 1.65; color: var(--ink); overflow-wrap: anywhere; }
+    .leaflet-popup-content strong { font-size: 16px; }
+    .leaflet-popup-content a { display: inline-block; padding: 5px 0; }
+    .leaflet-control-attribution a { text-decoration: underline; }
+    .leaflet-popup-content-wrapper { border-radius: 12px; }
+    .marker-cluster-small, .marker-cluster-medium, .marker-cluster-large { background: #c9d8c9; }
+    .marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div { background: var(--ink); color: white; font-weight: 750; }
+    #update-app { margin-top: 10px; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .leaflet-popup-content { line-height: 1.42; }
-    .leaflet-popup-content a { white-space: nowrap; }
-    @media (max-width: 600px) {
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; scroll-behavior: auto !important; } }
+    @media (max-width: 700px) {
       body { display: flex; flex-direction: column; }
-      #map { flex: 1; min-height: 45dvh; }
-      .panel { position: relative; top: auto; left: auto; width: 100%; max-height: 50dvh; flex-shrink: 0; padding: 10px; border-radius: 0; }
-      .title { font-size: 16px; }
+      .panel { height: auto; max-height: 54dvh; flex-shrink: 0; padding: max(18px, env(safe-area-inset-top)) 18px 14px; border-right: 0; border-bottom: 1px solid var(--line); }
+      #map { flex: 1; min-height: 44dvh; }
+      h1 { max-width: none; font-size: 26px; }
+      .intro { margin: 8px 0 14px; }
+      .eyebrow { margin-bottom: 5px; }
     }
   </style>
 </head>
 <body>
-  <div class="panel">
-    <div class="title-row">
-      <div class="title">Restaurant Bucket List</div>
+  <aside class="panel" aria-label="Restaurant search and filters">
+    <header>
+      <p class="eyebrow">Good food. Worth the journey.</p>
+      <h1>Restaurant Bucket List</h1>
+      <p class="intro">Find your next great meal, close to home or further afield.</p>
+    </header>
+    <label class="search-label" for="search">Search your list</label>
+    <input id="search" type="search" placeholder="Search restaurant, city or cuisine" autocomplete="off">
+    <p id="match-summary" class="match-summary" aria-live="polite">Loading your restaurant list…</p>
+    <details id="filter-controls" open>
+      <summary>Filter your list <span id="filter-count"></span></summary>
+    <div class="filters-heading"><h2>Make it your kind of meal</h2><button id="reset-filters" class="text-button" type="button">Clear filters</button></div>
+    <div class="filter-grid">
+      <label for="cuisine">Cuisine<select id="cuisine"><option value="">All cuisines</option></select></label>
+      <label for="price">Price<select id="price"><option value="">All prices</option></select></label>
+      <label for="city">City / location<select id="city"><option value="">All locations</option></select></label>
+      <label for="area">Neighbourhood<select id="area"><option value="">All areas</option></select></label>
+      <label for="priority" class="filter-wide">Priority<select id="priority"><option value="">All priorities</option></select></label>
     </div>
-    <input id="search" type="search" aria-label="Search restaurant, city or cuisine" placeholder="Search restaurant, city or cuisine" autocomplete="off">
+    </details>
     <details id="location-controls">
-      <summary>Find restaurants near a location</summary>
+      <summary>Find nearby · place or Near me</summary>
       <form id="location-form">
         <label for="place">Town, city or postcode</label>
         <input id="place" type="search" placeholder="e.g. Milton Keynes or SW1A 1AA" required maxlength="160">
-        <button id="find-place" type="submit">Find location</button>
+        <button id="find-place" class="primary" type="submit">Find location</button>
       </form>
       <div id="place-results"></div>
       <div class="actions">
-        <button id="near-me" type="button">Near me</button>
+        <button id="near-me" class="primary" type="button">Near me</button>
         <button id="clear-location" type="button" hidden>Clear location</button>
       </div>
       <label for="radius">Search radius</label>
@@ -94,22 +125,22 @@
       <div id="location-status" role="status" aria-live="polite"></div>
       <div class="location-credit">Place search: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a>. Only submitted place searches are sent to Nominatim. Your device location stays in this browser.</div>
     </details>
-    <select id="priority" aria-label="Filter by priority">
-      <option value="">All priorities</option>
-    </select>
+
     <div class="actions">
       <button id="refresh" type="button">Refresh data</button>
       <a class="sheet-link" href="https://docs.google.com/spreadsheets/d/18W5-PKVhFFDG4yvtG6pMZOXP_86XxnHjc4GsgIRrg3A/edit" target="_blank" rel="noopener">Open sheet</a>
     </div>
-    <details id="nearby-results" hidden><summary>Nearby restaurants · up to 30 nearest</summary><ol id="nearby-list" class="nearby-list"></ol></details>
+    <div id="empty-state" hidden>No restaurants match these filters. Try a different cuisine, a wider radius, or clear your filters.</div>
+    <details id="nearby-results"><summary id="results-title">Explore restaurants</summary><p id="results-note"></p><ol id="nearby-list" class="nearby-list"></ol></details>
     <details><summary>Install this app</summary>
       <button id="install" type="button" hidden>Install app</button>
       <p class="muted" id="install-help">On iPhone or iPad, open in Safari, tap Share, then Add to Home Screen. On Android, use your browser’s Install app or Add to Home screen menu. Offline use needs a previous online visit; fresh data and map tiles need a connection.</p>
     </details>
+    <button id="update-app" type="button" class="primary" hidden>Update app</button>
     <div id="status" class="status loading" role="status" aria-live="polite">Loading Google Sheet…</div>
     <div class="muted">All restaurant details and marker coordinates come from the “Map Data” tab. Google Maps opens the venue search link stored in the sheet.</div>
-  </div>
-  <div id="map"></div>
+  </aside>
+  <main id="map" aria-label="Restaurant map"></main>
 
   <script src="./vendor/leaflet/leaflet.js"></script>
   <script src="./vendor/leaflet.markercluster/leaflet.markercluster.js"></script>
@@ -122,13 +153,16 @@
 
 
     const map = L.map('map').setView([54, -2.5], 6);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
     const group = L.markerClusterGroup();
     map.addLayer(group);
+    if (typeof ResizeObserver !== 'undefined') {
+      new ResizeObserver(() => map.invalidateSize()).observe(document.getElementById('map'));
+    }
 
     let data = [];
     let latestLoadLabel = '';
@@ -136,20 +170,23 @@
     let jsonpScript = null;
     let loadVersion = 0;
     let loadError = '';
+    let loading = false;
     let locationOrigin = null;
     let originMarker = null;
 
     const searchInput = document.getElementById('search');
-    const prioritySelect = document.getElementById('priority');
     const status = document.getElementById('status');
     const refreshButton = document.getElementById('refresh');
+    if (typeof matchMedia !== 'undefined' && matchMedia('(max-width: 700px)').matches) {
+      document.getElementById('filter-controls').open = false;
+    }
 
     function normalise(value) {
       return String(value ?? '')
         .normalize('NFKD')
         .replace(/[\u0300-\u036f]/g, '')
         .toLowerCase()
-        .replace(/[^a-z0-9]+/g, ' ')
+        .replace(/[^\p{L}\p{N}]+/gu, ' ')
         .trim();
     }
 
@@ -162,7 +199,7 @@
     function safeHttpUrl(value) {
       try {
         const url = new URL(String(value ?? ''));
-        return (url.protocol === 'http:' || url.protocol === 'https:') ? url.href : '';
+        return ((url.protocol === 'http:' || url.protocol === 'https:') && !url.username && !url.password) ? url.href : '';
       } catch (_) {
         return '';
       }
@@ -203,7 +240,7 @@
 
       const headers = table.cols.map(column => normalise(column.label || column.id || ''));
       return table.rows.map(row => {
-        const raw = {};
+        const raw = Object.create(null);
         headers.forEach((header, index) => {
           if (header) raw[header] = gvizValue(row.c?.[index]);
         });
@@ -227,13 +264,23 @@
       }).filter(item => item.name);
     }
 
-    function populatePriorities() {
-      const previous = prioritySelect.value;
-      const priorities = [...new Set(data.map(item => item.priority).filter(Boolean))]
-        .sort((a, b) => a.localeCompare(b, 'en-GB'));
-      prioritySelect.replaceChildren(new Option('All priorities', ''));
-      priorities.forEach(priority => prioritySelect.add(new Option(priority, priority)));
-      if (priorities.includes(previous)) prioritySelect.value = previous;
+    const filterLabels = { cuisine: 'All cuisines', price: 'All prices', city: 'All locations', area: 'All areas', priority: 'All priorities' };
+    // JSON encoding distinguishes an empty spreadsheet value from the no-filter value.
+    function filterKey(value) { return JSON.stringify(String(value ?? '').trim().toLocaleLowerCase('en-GB')); }
+    function cuisineValues(item) { return String(item.cuisine || '').split('/').map(value => value.trim()).filter(Boolean); }
+    function valuesFor(item, field) { return field === 'cuisine' ? (cuisineValues(item).length ? cuisineValues(item) : ['']) : [item[field] || '']; }
+    function populateFilters() {
+      for (const [field, label] of Object.entries(filterLabels)) {
+        const select = document.getElementById(field);
+        const previous = select.value;
+        const source = field === 'area' && document.getElementById('city').value
+          ? data.filter(item => filterKey(item.city) === document.getElementById('city').value) : data;
+        const choices = new Map();
+        source.forEach(item => valuesFor(item, field).forEach(value => choices.set(filterKey(value), value || 'Not specified')));
+        select.replaceChildren(new Option(label, ''));
+        [...choices].sort((a, b) => a[1].localeCompare(b[1], 'en-GB')).forEach(([key, text]) => select.add(new Option(text, key)));
+        if (choices.has(previous)) select.value = previous;
+      }
     }
 
     function popupHtml(item) {
@@ -258,45 +305,63 @@
     function render() {
       group.clearLayers();
       const query = normalise(searchInput.value);
-      const priority = prioritySelect.value;
+      const filters = Object.fromEntries(Object.keys(filterLabels).map(field => [field, document.getElementById(field).value]));
+      const activeCount = Object.values(filters).filter(Boolean).length;
+      document.getElementById('filter-count').textContent = activeCount ? `(${activeCount} active)` : '';
       let visible = 0;
       let unmapped = 0;
 
       const nearby = [];
       for (const item of data) {
         const haystack = normalise([item.name, item.city, item.area, item.cuisine, item.priority].join(' '));
-        if (priority && item.priority !== priority) continue;
+        if (Object.entries(filters).some(([field, selected]) => selected && !valuesFor(item, field).some(value => filterKey(value) === selected))) continue;
         if (query && !haystack.includes(query)) continue;
         const distance = locationOrigin && item.coords ? distanceMiles(locationOrigin, item.coords) : null;
         if (distance !== null && distance > Number(document.getElementById('radius').value || 10)) continue;
         visible += 1;
         if (!item.coords) {
           unmapped += 1;
+          nearby.push({ item, distance: null, marker: null });
           continue;
         }
-        const marker = L.marker([item.coords.lat, item.coords.lon]).bindPopup(popupHtml(item) + (distance === null ? '' : `<br>${distance.toFixed(1)} miles away (straight line)`));
+        const marker = L.marker([item.coords.lat, item.coords.lon], { title: item.name, alt: item.name }).bindPopup(popupHtml(item) + (distance === null ? '' : `<br>${distance.toFixed(1)} miles away (straight line)`));
         group.addLayer(marker);
-        if (distance !== null) nearby.push({ item, distance, marker });
+        nearby.push({ item, distance, marker });
       }
 
       const list = document.getElementById('nearby-list');
       list.replaceChildren();
-      document.getElementById('nearby-results').hidden = !locationOrigin;
-      nearby.sort((a, b) => a.distance - b.distance).slice(0, 30).forEach(({ item, distance, marker }) => {
+      document.getElementById('nearby-results').hidden = false;
+      document.getElementById('results-title').textContent = locationOrigin ? 'Nearby restaurants' : 'Explore restaurants';
+      document.getElementById('results-note').textContent = `Showing ${Math.min(30, nearby.length)} of ${nearby.length} matches · ${locationOrigin ? 'nearest first; unmapped entries follow' : 'A–Z'}`;
+      nearby.sort((a, b) => locationOrigin && a.distance !== b.distance
+        ? (a.distance ?? Infinity) - (b.distance ?? Infinity)
+        : a.item.name.localeCompare(b.item.name, 'en-GB')).slice(0, 30).forEach(({ item, distance, marker }) => {
         const li = document.createElement('li');
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.textContent = `${item.name} · ${distance.toFixed(1)} miles`;
-        button.addEventListener('click', () => group.zoomToShowLayer(marker, () => marker.openPopup()));
-        li.appendChild(button);
+        li.className = 'restaurant-card';
+        li.innerHTML = popupHtml(item);
+        if (marker) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.textContent = distance === null ? `Show ${item.name} on map` : `${item.name} · ${distance.toFixed(1)} miles`;
+          button.addEventListener('click', () => group.zoomToShowLayer(marker, () => marker.openPopup()));
+          li.appendChild(button);
+        } else {
+          const note = document.createElement('p');
+          note.className = 'unmapped-note';
+          note.textContent = 'No valid coordinates in the sheet. Use the links above for venue details.';
+          li.appendChild(note);
+        }
         list.appendChild(li);
       });
-      if (locationOrigin && !nearby.length) list.textContent = 'No mapped restaurants match. Try a larger radius or clear your filters.';
+      if (!nearby.length) list.textContent = 'No restaurants match. Try a larger radius or clear your filters.';
+      document.getElementById('empty-state').hidden = visible !== 0 || !data.length;
       const mappedVisible = visible - unmapped;
+      document.getElementById('match-summary').textContent = `${visible.toLocaleString('en-GB')} matches · ${mappedVisible.toLocaleString('en-GB')} on the map${unmapped ? ` · ${unmapped} without coordinates` : ''}`;
       const totalMapped = data.filter(item => item.coords).length;
       const suffix = unmapped ? ` · ${unmapped} filtered result${unmapped === 1 ? '' : 's'} missing or invalid Latitude/Longitude` : '';
-      status.className = totalMapped && !loadError ? 'status' : 'status error';
-      status.textContent = `${mappedVisible} marker${mappedVisible === 1 ? '' : 's'} shown · ${totalMapped}/${data.length} rows mapped${latestLoadLabel ? ` · ${latestLoadLabel}` : ''}${suffix}${loadError ? ` · Live refresh failed: ${loadError}` : ''}`;
+      status.className = loading ? 'status loading' : totalMapped && !loadError ? 'status' : 'status error';
+      status.textContent = `${mappedVisible} marker${mappedVisible === 1 ? '' : 's'} shown · ${totalMapped}/${data.length} rows mapped${latestLoadLabel ? ` · ${latestLoadLabel}` : ''}${suffix}${loading ? ' · Refreshing…' : ''}${loadError ? ` · Live refresh failed: ${loadError}` : ''}`;
     }
 
     function distanceMiles(a, b) {
@@ -308,7 +373,7 @@
     function useData(items, loadLabel, saveCache = true) {
       data = items;
       latestLoadLabel = loadLabel;
-      populatePriorities();
+      populateFilters();
       render();
       if (saveCache) {
         try {
@@ -335,6 +400,7 @@
     }
 
     function failLoad(message) {
+      loading = false;
       clearTimeout(loadTimeout);
       refreshButton.disabled = false;
       loadError = message;
@@ -347,6 +413,7 @@
     }
 
     function googleSheetLoaded(response) {
+      loading = false;
       clearTimeout(loadTimeout);
       refreshButton.disabled = false;
       if (!response || response.status === 'error') {
@@ -366,6 +433,7 @@
     }
 
     function loadSheet() {
+      loading = true;
       clearTimeout(loadTimeout);
       refreshButton.disabled = true;
       status.className = 'status loading';
@@ -393,7 +461,19 @@
     }
 
     searchInput.addEventListener('input', render);
-    prioritySelect.addEventListener('change', render);
+    for (const field of Object.keys(filterLabels)) {
+      document.getElementById(field).addEventListener('change', () => {
+        if (field === 'city') populateFilters();
+        render();
+      });
+    }
+    document.getElementById('reset-filters').addEventListener('click', () => {
+      searchInput.value = '';
+      Object.keys(filterLabels).forEach(field => { document.getElementById(field).value = ''; });
+      populateFilters();
+      if (typeof clearLocation === 'function') clearLocation();
+      else render();
+    });
     refreshButton.addEventListener('click', loadSheet);
     loadSheet();
   </script>

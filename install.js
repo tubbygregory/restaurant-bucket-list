@@ -2,7 +2,26 @@
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(() => {
+    navigator.serviceWorker.register('./sw.js').then(registration => {
+      const offerUpdate = () => {
+        if (registration.waiting && navigator.serviceWorker.controller) {
+          const update = document.getElementById('update-app');
+          update.hidden = false;
+          update.onclick = () => registration.waiting?.postMessage({ type: 'SKIP_WAITING' });
+        }
+      };
+      offerUpdate();
+      registration.addEventListener('updatefound', () => {
+        registration.installing?.addEventListener('statechange', offerUpdate);
+      });
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing && document.getElementById('update-app').hidden === false) {
+          refreshing = true;
+          window.location.reload();
+        }
+      });
+    }).catch(() => {
       document.getElementById('install-help').textContent += ' Offline setup failed; reconnect and reload to try again.';
     });
   });

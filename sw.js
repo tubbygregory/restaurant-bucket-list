@@ -1,5 +1,5 @@
 'use strict';
-const CACHE = 'restaurant-bucket-list-v1';
+const CACHE = 'restaurant-bucket-list-v2';
 const SHELL = ['./', './index.html', './location.js', './install.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-512.png', './icons/apple-touch-icon.png'];
 const ASSETS = [...SHELL, './vendor/leaflet/leaflet.css', './vendor/leaflet/leaflet.js',
   './vendor/leaflet/images/marker-icon.png', './vendor/leaflet/images/marker-icon-2x.png',
@@ -19,6 +19,9 @@ self.addEventListener('activate', event => {
     }
     await self.clients.claim();
   })());
+});
+self.addEventListener('message', event => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
 });
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);

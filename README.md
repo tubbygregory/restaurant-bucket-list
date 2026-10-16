@@ -23,3 +23,11 @@ Android browsers can offer “Install app”; use the app’s install button whe
 The service worker caches the app shell and local map libraries. After an online visit, cached restaurant data can be used offline; live spreadsheet updates, place search and map tiles need a connection. Browser storage eviction can remove offline data. Location permission is optional. Bump `sw.js`’s cache version when changing cached app assets; close existing tabs/windows to let a waiting update activate. Installation and OS integration should also be checked on real target phones.
 
 Run `node tests/browser.cjs` with Playwright/Chromium installed and the repository served at `http://127.0.0.1:8001/restaurant-bucket-list/` (serve `/workspace` on port 8001). `APP_URL` and `CHROMIUM_PATH` can override those defaults. These browser checks use fixtures and include actual service-worker offline reloads; they do not validate live geocoding, spreadsheet permissions or real phone installation.
+
+## Filters and restaurant cards
+
+Cuisine, price, city/location, neighbourhood and priority filters combine with search and any nearby radius. Options come from the current spreadsheet/cache, including “Not specified” for empty fields. Cuisine choices split slash-separated labels, so Japanese also matches Japanese / Ramen. Price uses the sheet’s exact categories; ££ and £££ remain distinct. Neighbourhood choices follow the selected city. Refresh preserves valid selections; Clear filters also clears the nearby origin and search.
+
+Explore restaurants shows up to 30 matches alphabetically, or nearest first when a nearby origin is set. Unmapped records follow the mapped records in nearby mode. All records remain searchable and filterable; cards retain website and Google Maps links, including entries without valid map coordinates. Mobile filters are expandable to keep space for the map.
+
+Installed apps show an Update app button when a new service worker is waiting. Click it to activate and reload; an ordinary first install does not force a reload. Automated accessibility checks can be included in browser tests with `AXE_PATH=/path/to/axe.min.js node tests/browser.cjs`. See `AUDIT.md` for audit scope, evidence and remaining limitations.
