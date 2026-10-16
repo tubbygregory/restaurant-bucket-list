@@ -5,10 +5,15 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="An interactive restaurant bucket-list map, updated from Google Sheets.">
+  <meta name="theme-color" content="#164e43">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
   <title>Restaurant Bucket List Map</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+  <link rel="stylesheet" href="./vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="./vendor/leaflet.markercluster/MarkerCluster.css">
+  <link rel="stylesheet" href="./vendor/leaflet.markercluster/MarkerCluster.Default.css">
   <style>
     :root { color-scheme: light; }
     * { box-sizing: border-box; }
@@ -46,6 +51,11 @@
     button:hover { background: #f1f3f4; }
     .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
     .sheet-link { display: flex; align-items: center; justify-content: center; text-decoration: none; font-weight: 600; }
+    [hidden] { display: none !important; }
+    label { display: block; margin-top: 6px; font-weight: 600; }
+    .nearby-list { padding-left: 22px; font-size: 13px; }
+    .nearby-list button { text-align: left; font-weight: normal; }
+    .location-credit { font-size: 11px; }
     .muted { margin-top: 7px; color: #5f6368; font-size: 11px; line-height: 1.35; }
     .status { margin-top: 7px; padding-top: 7px; border-top: 1px solid #e0e0e0; font-size: 12px; line-height: 1.35; }
     .status.loading::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 6px; border: 2px solid #c4c7c5; border-top-color: #1a73e8; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -1px; }
@@ -67,6 +77,23 @@
       <div class="title">Restaurant Bucket List</div>
     </div>
     <input id="search" type="search" aria-label="Search restaurant, city or cuisine" placeholder="Search restaurant, city or cuisine" autocomplete="off">
+    <details id="location-controls">
+      <summary>Find restaurants near a location</summary>
+      <form id="location-form">
+        <label for="place">Town, city or postcode</label>
+        <input id="place" type="search" placeholder="e.g. Milton Keynes or SW1A 1AA" required maxlength="160">
+        <button id="find-place" type="submit">Find location</button>
+      </form>
+      <div id="place-results"></div>
+      <div class="actions">
+        <button id="near-me" type="button">Near me</button>
+        <button id="clear-location" type="button" hidden>Clear location</button>
+      </div>
+      <label for="radius">Search radius</label>
+      <select id="radius"><option value="5">5 miles</option><option value="10" selected>10 miles</option><option value="25">25 miles</option><option value="50">50 miles</option></select>
+      <div id="location-status" role="status" aria-live="polite"></div>
+      <div class="location-credit">Place search: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a>. Only submitted place searches are sent to Nominatim. Your device location stays in this browser.</div>
+    </details>
     <select id="priority" aria-label="Filter by priority">
       <option value="">All priorities</option>
     </select>
@@ -74,13 +101,18 @@
       <button id="refresh" type="button">Refresh data</button>
       <a class="sheet-link" href="https://docs.google.com/spreadsheets/d/18W5-PKVhFFDG4yvtG6pMZOXP_86XxnHjc4GsgIRrg3A/edit" target="_blank" rel="noopener">Open sheet</a>
     </div>
+    <details id="nearby-results" hidden><summary>Nearby restaurants · up to 30 nearest</summary><ol id="nearby-list" class="nearby-list"></ol></details>
+    <details><summary>Install this app</summary>
+      <button id="install" type="button" hidden>Install app</button>
+      <p class="muted" id="install-help">On iPhone or iPad, open in Safari, tap Share, then Add to Home Screen. On Android, use your browser’s Install app or Add to Home screen menu. Offline use needs a previous online visit; fresh data and map tiles need a connection.</p>
+    </details>
     <div id="status" class="status loading" role="status" aria-live="polite">Loading Google Sheet…</div>
     <div class="muted">All restaurant details and marker coordinates come from the “Map Data” tab. Google Maps opens the venue search link stored in the sheet.</div>
   </div>
   <div id="map"></div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script src="./vendor/leaflet/leaflet.js"></script>
+  <script src="./vendor/leaflet.markercluster/leaflet.markercluster.js"></script>
   <script>
     'use strict';
 
@@ -104,6 +136,8 @@
     let jsonpScript = null;
     let loadVersion = 0;
     let loadError = '';
+    let locationOrigin = null;
+    let originMarker = null;
 
     const searchInput = document.getElementById('search');
     const prioritySelect = document.getElementById('priority');
@@ -228,23 +262,47 @@
       let visible = 0;
       let unmapped = 0;
 
+      const nearby = [];
       for (const item of data) {
         const haystack = normalise([item.name, item.city, item.area, item.cuisine, item.priority].join(' '));
         if (priority && item.priority !== priority) continue;
         if (query && !haystack.includes(query)) continue;
+        const distance = locationOrigin && item.coords ? distanceMiles(locationOrigin, item.coords) : null;
+        if (distance !== null && distance > Number(document.getElementById('radius').value || 10)) continue;
         visible += 1;
         if (!item.coords) {
           unmapped += 1;
           continue;
         }
-        group.addLayer(L.marker([item.coords.lat, item.coords.lon]).bindPopup(popupHtml(item)));
+        const marker = L.marker([item.coords.lat, item.coords.lon]).bindPopup(popupHtml(item) + (distance === null ? '' : `<br>${distance.toFixed(1)} miles away (straight line)`));
+        group.addLayer(marker);
+        if (distance !== null) nearby.push({ item, distance, marker });
       }
 
+      const list = document.getElementById('nearby-list');
+      list.replaceChildren();
+      document.getElementById('nearby-results').hidden = !locationOrigin;
+      nearby.sort((a, b) => a.distance - b.distance).slice(0, 30).forEach(({ item, distance, marker }) => {
+        const li = document.createElement('li');
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = `${item.name} · ${distance.toFixed(1)} miles`;
+        button.addEventListener('click', () => group.zoomToShowLayer(marker, () => marker.openPopup()));
+        li.appendChild(button);
+        list.appendChild(li);
+      });
+      if (locationOrigin && !nearby.length) list.textContent = 'No mapped restaurants match. Try a larger radius or clear your filters.';
       const mappedVisible = visible - unmapped;
       const totalMapped = data.filter(item => item.coords).length;
       const suffix = unmapped ? ` · ${unmapped} filtered result${unmapped === 1 ? '' : 's'} missing or invalid Latitude/Longitude` : '';
       status.className = totalMapped && !loadError ? 'status' : 'status error';
       status.textContent = `${mappedVisible} marker${mappedVisible === 1 ? '' : 's'} shown · ${totalMapped}/${data.length} rows mapped${latestLoadLabel ? ` · ${latestLoadLabel}` : ''}${suffix}${loadError ? ` · Live refresh failed: ${loadError}` : ''}`;
+    }
+
+    function distanceMiles(a, b) {
+      const rad = degrees => degrees * Math.PI / 180;
+      const h = Math.sin(rad(b.lat - a.lat) / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(rad(b.lon - a.lon) / 2) ** 2;
+      return 3958.7613 * 2 * Math.asin(Math.sqrt(Math.min(1, Math.max(0, h))));
     }
 
     function useData(items, loadLabel, saveCache = true) {
@@ -339,5 +397,7 @@
     refreshButton.addEventListener('click', loadSheet);
     loadSheet();
   </script>
+  <script src="./location.js"></script>
+  <script src="./install.js"></script>
 </body>
 </html>

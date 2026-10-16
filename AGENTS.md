@@ -4,7 +4,7 @@ Buildless static Leaflet map. Production: https://tubbygregory.github.io/restaur
 
 ## Source and deployment
 - `index.html` contains the application, styling and client-side data loader.
-- `.github/workflows/pages.yml` validates inline JavaScript and deploys only `index.html` and `.nojekyll` to GitHub Pages after pushes to `main` or a manual workflow dispatch.
+- `.github/workflows/pages.yml` validates inline JavaScript and deploys `index.html`, location/install scripts, manifest, service worker, icons, vendored map assets and `.nojekyll` to GitHub Pages after pushes to `main` or a manual workflow dispatch.
 - GitHub Pages is the production hosting target. The user enabled deployment after authorizing public repository visibility. Preserve GitHub Actions as the Pages source.
 - Netlify is the legacy host. Do not reconnect it or treat it as the deployment target. Do not delete the legacy site without a user request.
 - Do not commit secrets or credentials.
@@ -19,3 +19,10 @@ Buildless static Leaflet map. Production: https://tubbygregory.github.io/restaur
 - Check inline JavaScript syntax after code changes.
 - Verify live data loading, search, priority filters, refresh and marker popup links when browser access is available.
 - Check mobile layout for changes affecting controls or map coverage.
+
+## Location and installation
+- `location.js` handles explicit Nominatim place searches and permission-based device geolocation. Do not add autocomplete/background geocoding or send device coordinates to a geocoder. Preserve attribution, submitted-query caching and rate limiting.
+- Nearby filtering uses straight-line miles, preserves existing text/priority filters and reports unmapped records. Never invent coordinates.
+- `manifest.webmanifest`, `install.js`, `sw.js` and `icons/` support installation. All paths and service-worker scope must work under `/restaurant-bucket-list/`.
+- Map libraries are pinned local distribution files in `vendor/`, with licenses. Bump the cache version in `sw.js` whenever app-shell assets change. Do not cache spreadsheet JSONP, geocoding responses or tiles in the service worker.
+- Run `node --test tests/*.test.cjs`. With Playwright/Chromium available, serve `/workspace` on port 8001 and run `node tests/browser.cjs` from the checkout. The browser tests use fixture data and verify place search, geolocation, layout, manifest and offline reload; distinguish them from live-service checks.

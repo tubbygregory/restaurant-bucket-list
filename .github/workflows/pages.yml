@@ -23,7 +23,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: node --test tests/app.test.cjs
+      - run: node --test tests/*.test.cjs
 
   deploy:
     needs: validate
@@ -37,7 +37,8 @@ jobs:
       - name: Check JavaScript and prepare public files
         run: |
           mkdir -p _site
-          cp index.html _site/index.html
+          cp index.html location.js install.js sw.js manifest.webmanifest _site/
+          cp -R icons vendor _site/
           node -e "const fs=require('fs'); const s=fs.readFileSync('index.html','utf8'); for (const m of s.matchAll(/<script>([\\s\\S]*?)<\\/script>/g)) new (require('vm').Script)(m[1]);"
           touch _site/.nojekyll
       - uses: actions/configure-pages@v5

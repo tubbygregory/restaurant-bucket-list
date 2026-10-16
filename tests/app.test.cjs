@@ -5,11 +5,11 @@ const fs=require('node:fs');
 const source=[...fs.readFileSync('index.html','utf8').matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]).join('\n');
 function app(){
   const elements={};
-  const element=()=>({value:'',textContent:'',className:'',addEventListener(){},replaceChildren(){this.value='';},add(){},remove(){}});
+  const element=()=>({value:'',textContent:'',className:'',children:[],addEventListener(type,handler){(this.handlers??={})[type]=handler;},replaceChildren(){this.children=[];},appendChild(child){this.children.push(child);},add(){},remove(){}});
   const layers=[];
   const group={clearLayers(){layers.length=0;},addLayer(m){layers.push(m);}};
   const storage=new Map();
-  const context={console,URL,Option:function(){},Date,setTimeout:()=>1,clearTimeout(){},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},document:{getElementById:id=>elements[id]??=element(),createElement:element,head:{appendChild(){}}},L:{map:()=>({setView(){return this;},addLayer(){}}),tileLayer:()=>({addTo(){}}),markerClusterGroup:()=>group,marker:coords=>({coords,bindPopup(html){this.html=html;return this;}})}};
+  const context={console,URL,Option:function(){},Date,setTimeout:()=>1,clearTimeout(){},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},document:{getElementById:id=>elements[id]??=element(),createElement:element,head:{appendChild(){}}},L:{map:()=>({setView(){return this;},addLayer(){},removeLayer(){}}),tileLayer:()=>({addTo(){}}),markerClusterGroup:()=>group,marker:coords=>({coords,bindPopup(html){this.html=html;return this;}})}};
   context.window=context;vm.createContext(context);vm.runInContext(source,context);
   return {context,elements,layers,storage,run:code=>vm.runInContext(code,context)};
 }
@@ -42,4 +42,46 @@ test('failed refresh retains loaded records even when storage is unavailable',()
 test('invalid cache and malformed table fail visibly and allow retry',()=>{
  const a=app();a.storage.set('restaurantBucketMap.sheetData.v3',JSON.stringify({savedAt:Date.now(),items:[null]}));
  a.context.googleSheetLoaded1({table:{}});assert.match(a.elements.status.textContent,/unexpected format/);assert.equal(a.elements.refresh.disabled,false);assert.equal(a.layers.length,0);
+});
+
+
+test('nearby radius filters and sorts mapped records without hiding unmapped counts',()=>{
+ const a=app();
+ a.run("locationOrigin={lat:51.5,lon:-0.1}; document.getElementById('radius').value='10'");
+ a.context.googleSheetLoaded1({table});
+ assert.equal(a.layers.length,1);
+ assert.equal(a.elements['nearby-list'].children.length,1);
+ assert.match(a.elements['nearby-list'].children[0].children[0].textContent,/0.0 miles/);
+ assert.match(a.elements.status.textContent,/missing or invalid/);
+ a.run('locationOrigin={lat:55,lon:0}; render()');assert.equal(a.layers.length,0);
+ assert.match(a.elements['nearby-list'].textContent,/No mapped restaurants/);
+ assert.ok(Math.abs(a.run('distanceMiles({lat:0,lon:0},{lat:0,lon:1})')-69.09)<0.1);
+});
+
+test('place lookup, permission denial and clearing location',async()=>{
+ const a=app();
+ a.context.AbortSignal=AbortSignal;
+ a.context.URLSearchParams=URLSearchParams;
+ a.context.navigator={geolocation:{getCurrentPosition(success,failure){failure({code:1});}}};
+ a.context.fetch=async url=>{assert.equal(url.hostname,'nominatim.openstreetmap.org');assert.equal(url.searchParams.get('q'),'London');return {ok:true,json:async()=>[{display_name:'London <test>',lat:'51.5',lon:'-0.1'}]};};
+ a.context.L.circleMarker=()=>({addTo(){return this;},bindPopup(){return this;}});
+ a.run(fs.readFileSync('location.js','utf8'));
+ a.run("document.getElementById('place').value='London'");await a.elements['location-form'].handlers.submit({preventDefault(){}});
+ assert.equal(a.elements['place-results'].children[0].textContent,'London <test>');
+ a.elements['place-results'].children[0].handlers.click();assert.equal(a.run('locationOrigin.lat'),51.5);
+ a.elements['clear-location'].handlers.click();assert.equal(a.run('locationOrigin'),null);
+ a.elements['near-me'].handlers.click();assert.match(a.elements['location-status'].textContent,/permission was denied/);
+});
+
+test('manifest assets and service-worker cache stay within repository subpath',()=>{
+ const manifest=JSON.parse(fs.readFileSync('manifest.webmanifest','utf8'));
+ const base='https://example.com/restaurant-bucket-list/';
+ assert.equal(new URL(manifest.start_url,base).pathname,'/restaurant-bucket-list/');
+ assert.equal(new URL(manifest.scope,base).pathname,'/restaurant-bucket-list/');
+ for(const icon of manifest.icons) assert.ok(fs.existsSync(icon.src));
+ const listeners={};let added=[];
+ const context={URL,Request,Promise,caches:{open:async()=>({addAll:async paths=>{added=paths;}})},self:{addEventListener:(name,fn)=>listeners[name]=fn}};
+ vm.createContext(context);vm.runInContext(fs.readFileSync('sw.js','utf8'),context);
+ let pending;listeners.install({waitUntil:p=>pending=p});
+ return pending.then(()=>{assert.ok(added.length>10);for(const path of added){assert.ok(fs.existsSync(path));assert.ok(new URL(path,base).pathname.startsWith('/restaurant-bucket-list/'));}});
 });
