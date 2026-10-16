@@ -25,6 +25,7 @@ jobs:
         run: |
           node --test tests/*.test.cjs
           node --check location.js
+          node --check navigation.js
           node --check install.js
           node --check sw.js
 
@@ -44,7 +45,7 @@ jobs:
       - name: Check JavaScript and prepare public files
         run: |
           mkdir -p _site
-          cp index.html location.js install.js sw.js manifest.webmanifest _site/
+          cp index.html navigation.js location.js install.js sw.js manifest.webmanifest _site/
           cp -R icons vendor _site/
           node -e "const fs=require('fs'); const s=fs.readFileSync('index.html','utf8'); for (const m of s.matchAll(/<script>([\\s\\S]*?)<\\/script>/g)) new (require('vm').Script)(m[1]);"
           touch _site/.nojekyll

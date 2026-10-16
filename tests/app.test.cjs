@@ -124,3 +124,13 @@ test('app update is explicit for existing installs and does not reload a first i
   workerEvents.controllerchange();workerEvents.controllerchange();assert.equal(reloaded,controlled?1:0);
  }
 });
+
+
+test('offline app navigation fragments still resolve to the cached shell',async()=>{
+ const listeners={};const cached={cached:true};let pending;
+ const context={URL,Request,Promise,fetch:async()=>{throw Error('offline');},caches:{open:async()=>({match:async()=>cached})},self:{location:{origin:'https://example.com'},registration:{scope:'https://example.com/restaurant-bucket-list/'},addEventListener:(name,fn)=>listeners[name]=fn}};
+ vm.createContext(context);vm.runInContext(fs.readFileSync('sw.js','utf8'),context);
+ listeners.fetch({request:new Request('https://example.com/restaurant-bucket-list/#map'),respondWith:p=>pending=p});
+ assert.ok(pending);assert.equal(await pending,cached);
+ pending=null;listeners.fetch({request:new Request('https://tile.openstreetmap.org/1/0/0.png'),respondWith:p=>pending=p});assert.equal(pending,null);
+});
