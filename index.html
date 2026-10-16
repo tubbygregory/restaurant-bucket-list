@@ -2,9 +2,7 @@
 <html lang="en-GB">
 <head>
   <meta charset="utf-8">
-<!-- This site is hosted on Netlify. Anyone can build and deploy a site
-     like this one for free: https://netlify.new/?utm_campaign=loops&utm_source=ai-legible&utm_medium=owned&utm_content=comment&utm_id=7896a921-c5bc-4582-9e58-5fecb8e82a76
-     Netlify hosting facts for this site: static/SSR served via Netlify Edge. -->
+
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="An interactive restaurant bucket-list map, updated from Google Sheets.">
   <title>Restaurant Bucket List Map</title>
@@ -28,12 +26,14 @@
       border-radius: 10px;
       box-shadow: 0 2px 12px rgba(0,0,0,.28);
       font-size: 14px;
+      max-height: calc(100dvh - 24px);
+      overflow-y: auto;
     }
     .title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
     .title { font-size: 17px; font-weight: 700; }
     input, select, button, .sheet-link {
       width: 100%;
-      min-height: 38px;
+      min-height: 44px;
       margin: 4px 0;
       padding: 8px 10px;
       border: 1px solid #b8bec4;
@@ -54,7 +54,9 @@
     .leaflet-popup-content { line-height: 1.42; }
     .leaflet-popup-content a { white-space: nowrap; }
     @media (max-width: 600px) {
-      .panel { top: 8px; left: 44px; width: calc(100vw - 52px); padding: 10px; }
+      body { display: flex; flex-direction: column; }
+      #map { flex: 1; min-height: 45dvh; }
+      .panel { position: relative; top: auto; left: auto; width: 100%; max-height: 50dvh; flex-shrink: 0; padding: 10px; border-radius: 0; }
       .title { font-size: 16px; }
     }
   </style>
@@ -64,7 +66,7 @@
     <div class="title-row">
       <div class="title">Restaurant Bucket List</div>
     </div>
-    <input id="search" type="search" placeholder="Search restaurant, city or cuisine" autocomplete="off">
+    <input id="search" type="search" aria-label="Search restaurant, city or cuisine" placeholder="Search restaurant, city or cuisine" autocomplete="off">
     <select id="priority" aria-label="Filter by priority">
       <option value="">All priorities</option>
     </select>
@@ -100,6 +102,8 @@
     let latestLoadLabel = '';
     let loadTimeout = null;
     let jsonpScript = null;
+    let loadVersion = 0;
+    let loadError = '';
 
     const searchInput = document.getElementById('search');
     const prioritySelect = document.getElementById('priority');
@@ -141,7 +145,8 @@
     function resolveCoordinates(item) {
       const latitudeText = String(item.latitude ?? '').trim();
       const longitudeText = String(item.longitude ?? '').trim();
-      if (latitudeText === '' || longitudeText === '') return null;
+      const decimal = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
+      if (!decimal.test(latitudeText) || !decimal.test(longitudeText)) return null;
 
       const latitude = Number(latitudeText);
       const longitude = Number(longitudeText);
@@ -237,9 +242,9 @@
 
       const mappedVisible = visible - unmapped;
       const totalMapped = data.filter(item => item.coords).length;
-      const suffix = unmapped ? ` · ${unmapped} filtered result${unmapped === 1 ? '' : 's'} missing Latitude/Longitude` : '';
-      status.className = totalMapped ? 'status' : 'status error';
-      status.textContent = `${mappedVisible} marker${mappedVisible === 1 ? '' : 's'} shown · ${totalMapped}/${data.length} rows mapped${latestLoadLabel ? ` · ${latestLoadLabel}` : ''}${suffix}`;
+      const suffix = unmapped ? ` · ${unmapped} filtered result${unmapped === 1 ? '' : 's'} missing or invalid Latitude/Longitude` : '';
+      status.className = totalMapped && !loadError ? 'status' : 'status error';
+      status.textContent = `${mappedVisible} marker${mappedVisible === 1 ? '' : 's'} shown · ${totalMapped}/${data.length} rows mapped${latestLoadLabel ? ` · ${latestLoadLabel}` : ''}${suffix}${loadError ? ` · Live refresh failed: ${loadError}` : ''}`;
     }
 
     function useData(items, loadLabel, saveCache = true) {
@@ -258,12 +263,13 @@
     function loadCachedData(reason) {
       try {
         const cache = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
-        if (!cache?.items?.length) throw new Error('No cache');
+        if (!Array.isArray(cache?.items) || !cache.items.length ||
+            !cache.items.every(item => item && typeof item.name === 'string' && item.name.trim()) ||
+            !Number.isFinite(cache.savedAt)) throw new Error('Invalid cache');
         const items = cache.items.map(item => ({ ...item, coords: resolveCoordinates(item) }));
         const saved = new Date(cache.savedAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+        loadError = reason;
         useData(items, `cached ${saved}`, false);
-        status.className = 'status error';
-        status.textContent += ` · Live refresh failed: ${reason}`;
         return true;
       } catch (_) {
         return false;
@@ -273,13 +279,16 @@
     function failLoad(message) {
       clearTimeout(loadTimeout);
       refreshButton.disabled = false;
-      if (!loadCachedData(message)) {
+      loadError = message;
+      if (data.length) {
+        render();
+      } else if (!loadCachedData(message)) {
         status.className = 'status error';
         status.textContent = `${message} Check that the Google Sheet is shared as “Anyone with the link – Viewer”, then refresh.`;
       }
     }
 
-    window.googleSheetLoaded = function googleSheetLoaded(response) {
+    function googleSheetLoaded(response) {
       clearTimeout(loadTimeout);
       refreshButton.disabled = false;
       if (!response || response.status === 'error') {
@@ -291,11 +300,12 @@
         const items = parseGoogleTable(response.table);
         if (!items.length) throw new Error('No restaurant rows were found in the Map Data tab.');
         const loadedAt = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        loadError = '';
         useData(items, `live sheet loaded ${loadedAt}`);
       } catch (error) {
         failLoad(error.message || 'Could not read the sheet.');
       }
-    };
+    }
 
     function loadSheet() {
       clearTimeout(loadTimeout);
@@ -305,13 +315,23 @@
 
       if (jsonpScript) jsonpScript.remove();
       jsonpScript = document.createElement('script');
-      const tqx = encodeURIComponent('out:json;responseHandler:googleSheetLoaded');
+      const version = ++loadVersion;
+      const callback = `googleSheetLoaded${version}`;
+      const finish = handler => {
+        if (version !== loadVersion) return;
+        ++loadVersion;
+        clearTimeout(loadTimeout);
+        window[callback] = () => {};
+        handler();
+      };
+      window[callback] = response => finish(() => googleSheetLoaded(response));
+      const tqx = encodeURIComponent(`out:json;responseHandler:${callback}`);
       jsonpScript.src = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(SHEET_NAME)}&headers=1&tqx=${tqx}&_=${Date.now()}`;
       jsonpScript.async = true;
-      jsonpScript.onerror = () => failLoad('Could not reach Google Sheets.');
+      jsonpScript.onerror = () => finish(() => failLoad('Could not reach Google Sheets.'));
       document.head.appendChild(jsonpScript);
 
-      loadTimeout = setTimeout(() => failLoad('Google Sheets took too long to respond.'), 15000);
+      loadTimeout = setTimeout(() => finish(() => failLoad('Google Sheets took too long to respond.')), 15000);
     }
 
     searchInput.addEventListener('input', render);
