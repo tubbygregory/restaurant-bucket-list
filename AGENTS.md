@@ -4,7 +4,7 @@ Buildless static Leaflet map. Production: https://tubbygregory.github.io/restaur
 
 ## Source and deployment
 - `index.html` contains the application, styling and client-side data loader.
-- `.github/workflows/pages.yml` validates inline JavaScript and deploys `index.html`, location/navigation/install scripts, manifest, service worker, icons, vendored map assets and `.nojekyll` to GitHub Pages after pushes to `main` or a manual workflow dispatch.
+- `.github/workflows/pages.yml` validates inline JavaScript and deploys `index.html`, location/navigation/features/install scripts, manifest, service worker, icons, vendored map assets and `.nojekyll` to GitHub Pages after pushes to `main` or a manual workflow dispatch.
 - GitHub Pages is the production hosting target. The user enabled deployment after authorizing public repository visibility. Preserve GitHub Actions as the Pages source.
 - Netlify is the legacy host. Do not reconnect it or treat it as the deployment target. Do not delete the legacy site without a user request.
 - Do not commit secrets or credentials.
@@ -32,3 +32,10 @@ Buildless static Leaflet map. Production: https://tubbygregory.github.io/restaur
 - Restaurant cards include unmapped records and saved links. Do not hide or discard those entries because they cannot be placed on the map.
 - `navigation.js` provides map-first navigation with separate Find, Filters, Results and More views on every screen size, modelled on the user’s Redways app. Preserve selections and browser Back support, keep inactive views hidden from focus/accessibility, and resize the map before opening a selected marker. Do not restore a simultaneous scrolling panel/map split.
 - PR jobs have read-only permissions; only main-branch deployment gets Pages/OIDC write permissions. Include external script syntax checks and regression tests in validation.
+
+## Personal collection and shared discovery
+- `features.js` owns personal localStorage, details, shuffle, sorting/pagination, map-area filtering and shared links. Never write personal status/notes into the spreadsheet or include them in public links.
+- Branch identity uses name/city/area/stored Maps link, never array index; preserve this unless implementing a deliberate migration. Protect corrupt stored data and report write failures.
+- Share links use fragment parameters so they work at the Pages subpath and offline. Location must be an explicit opt-in. Treat all incoming link state as untrusted and validate it.
+- Nearby/map-area shuffle excludes unmapped records; cards keep them browsable. Viewport filtering is explicit, not triggered by map movement, and handles the antimeridian.
+- Run `node tests/features-browser.cjs` as well as `node tests/browser.cjs` for feature changes. Include features.js in the deployed artifact, service-worker shell and syntax checks.

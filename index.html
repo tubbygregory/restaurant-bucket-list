@@ -83,6 +83,9 @@
     #view-caption { margin: 3px 0 0; font-size: 11px; color: var(--muted); }
     .header-find { margin-left: auto; width: auto; font-size: 12px; }
     .back-button { width: auto; white-space: nowrap; }
+    #map-stage { grid-row: 2; position: relative; min-height: 0; }
+    .map-actions { position: absolute; z-index: 900; top: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; max-width: calc(100% - 100px); }
+    .map-actions button { width: auto; font-size: 12px; box-shadow: 0 2px 8px #0002; }
     #map { grid-row: 2; min-height: 0; height: 100%; }
     .panel { grid-row: 2; height: 100%; max-height: none; width: 100%; border: 0; padding: 16px max(18px, calc((100% - 640px) / 2)) 28px; overflow-y: auto; }
     .view > h2 { font: 500 30px/1.2 Georgia, serif; margin: 18px 0 8px; }
@@ -92,6 +95,12 @@
     [aria-current="step"], .bottom-nav [aria-current="page"] { background: var(--ink); color: white; border-color: var(--ink); }
     .bottom-nav { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 6px; padding: 8px 12px max(8px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--paper); }
     .bottom-nav button { font-size: 12px; border-color: transparent; }
+    .check-label { display: flex; align-items: center; gap: 10px; margin: 14px 0; min-height: 44px; }
+    .check-label input { width: 20px; min-height: 20px; height: 20px; margin: 0; }
+    textarea { width: 100%; font: inherit; padding: 12px; border: 1px solid var(--line); border-radius: 9px; margin-top: 4px; }
+    #personal-form label, #sort-results, #share-link { margin-top: 12px; }
+    #share-panel { padding: 16px; border: 1px solid var(--line); border-radius: 12px; margin-top: 16px; }
+    #restaurant-details { font-size: 15px; line-height: 1.8; }
     .continue-button { margin-top: 16px; }
     #location-controls { margin-top: 26px; }
     .restaurant-card { margin-top: 14px; padding: 18px; }
@@ -110,7 +119,9 @@
     <div><h1>Restaurant Bucket List</h1><p id="view-caption">Your next great meal</p></div>
     <button type="button" class="header-find" data-view="find">Find a restaurant</button>
   </header>
-  <main id="map" aria-label="Restaurant map"></main>
+  <div id="map-stage"><main id="map" aria-label="Restaurant map"></main>
+    <div class="map-actions"><button id="search-map-area" type="button">Search this map area</button><button id="clear-map-area" type="button" hidden>Clear map area</button></div>
+  </div>
   <main id="workspace" class="panel" hidden>
     <nav id="search-steps" class="search-steps" aria-label="Restaurant search steps">
       <button type="button" data-view="find">1. Find</button><button type="button" data-view="filters">2. Filters</button><button type="button" data-view="results">3. Results</button>
@@ -136,7 +147,7 @@
       <label for="radius">Search radius</label>
       <select id="radius"><option value="5">5 miles</option><option value="10" selected>10 miles</option><option value="25">25 miles</option><option value="50">50 miles</option></select>
       <div id="location-status" role="status" aria-live="polite"></div>
-      <div class="location-credit">Place search: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a>. Only submitted place searches are sent to Nominatim. Your device location stays in this browser.</div>
+      <div class="location-credit">Place search: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a>. Only submitted place searches are sent to Nominatim. Device location stays here unless you explicitly include it in a shared link.</div>
     </div>
       <button type="button" class="primary continue-button" data-view="filters">Next: choose filters →</button>
       <button type="button" class="continue-button" data-view="results">See all matches</button>
@@ -155,16 +166,49 @@
       <label for="priority" class="filter-wide">Priority<select id="priority"><option value="">All priorities</option></select></label>
     </div>
     </div>
+      <h3>Your collection</h3>
+      <label for="personal-status">My status<select id="personal-status"><option value="">Any status</option><option value="want">Want to go</option><option value="visited">Visited</option><option value="unmarked">Not marked yet</option></select></label>
+      <label class="check-label"><input id="favourites-only" type="checkbox"> Favourites only</label>
+      <p class="muted">Personal status, favourites, ratings and notes stay on this browser/device.</p>
       <button type="button" class="primary continue-button" data-view="results">Show restaurants →</button>
     </section>
     <section id="view-results" class="view" hidden aria-labelledby="results-heading">
       <h2 id="results-heading" tabindex="-1">Pick your next meal</h2>
       <div class="actions"><button type="button" data-view="filters">Edit filters</button><button type="button" class="primary" data-view="map">View map</button></div>
+      <div class="actions"><button id="pick-restaurant" type="button">Pick somewhere for me</button><button id="share-shortlist" type="button">Share these filters</button></div>
+      <label for="sort-results">Sort restaurants<select id="sort-results"><option value="auto">Recommended order</option><option value="name">Name A–Z</option><option value="nearest">Nearest first</option><option value="priority">Highest priority</option><option value="price">Price: low to high</option></select></label>
+      <div id="discovery-message" role="status" aria-live="polite"></div>
+      <section id="share-panel" hidden aria-label="Share link"><button id="close-share" type="button" class="text-button">Close sharing</button><h3>Share a shortlist</h3><p>Only public filters are shared. Your notes, ratings, favourites and visited status are never included.</p>
+        <label class="check-label"><input id="share-location" type="checkbox"> Include nearby centre / map area (reveals that location)</label>
+        <button id="build-share" type="button">Create share link</button>
+        <label for="share-link">Link to share<input id="share-link" type="text" readonly></label>
+        <div class="actions"><button id="native-share" type="button">Share link</button><button id="copy-share" type="button">Copy link</button></div>
+        <p id="share-message" role="status"></p>
+      </section>
     <div id="empty-state" hidden>No restaurants match these filters. Try a different cuisine, a wider radius, or clear your filters.</div>
     <div id="nearby-results"><h3 id="results-title">Explore restaurants</h3><p id="results-note"></p><ol id="nearby-list" class="nearby-list"></ol></div>
+      <button id="load-more" class="continue-button" type="button" hidden>Load more restaurants</button>
+    </section>
+    <section id="view-details" class="view" hidden aria-labelledby="details-heading">
+      <h2 id="details-heading" tabindex="-1">Restaurant details</h2>
+      <div id="restaurant-details"></div>
+      <div class="actions"><button id="details-map" type="button">Show on map</button><button id="share-restaurant" type="button">Share restaurant</button></div>
+      <button id="shuffle-restaurant" class="continue-button" type="button" hidden>Pick another restaurant</button>
+      <form id="personal-form">
+        <h3>Your notes</h3>
+        <label class="check-label"><input id="detail-favourite" type="checkbox"> Favourite</label>
+        <label for="detail-status">My status<select id="detail-status"><option value="">Not marked</option><option value="want">Want to go</option><option value="visited">Visited</option></select></label>
+        <label for="detail-rating">My rating<select id="detail-rating"><option value="">Not rated</option><option value="1">1 / 5</option><option value="2">2 / 5</option><option value="3">3 / 5</option><option value="4">4 / 5</option><option value="5">5 / 5</option></select></label>
+        <label for="detail-note">My note<textarea id="detail-note" rows="4" maxlength="2000" placeholder="What would you like to remember?"></textarea></label>
+        <button class="primary continue-button" type="submit">Save my changes</button>
+      </form>
+      <p id="personal-message" role="status" aria-live="polite"></p>
+      <label for="restaurant-link">Restaurant link<input id="restaurant-link" type="text" readonly></label>
+      <button id="copy-restaurant" type="button" class="continue-button">Copy restaurant link</button>
     </section>
     <section id="view-more" class="view" hidden aria-labelledby="more-heading">
       <h2 id="more-heading" tabindex="-1">App &amp; data</h2>
+      <p class="muted">Your favourites, visited status, ratings and notes are stored only in this browser. Clearing site data or changing device removes them. There is no account or cross-device sync.</p>
     <div class="actions">
       <button id="refresh" type="button">Refresh data</button>
       <a class="sheet-link" href="https://docs.google.com/spreadsheets/d/18W5-PKVhFFDG4yvtG6pMZOXP_86XxnHjc4GsgIRrg3A/edit" target="_blank" rel="noopener">Open sheet</a>
@@ -216,6 +260,9 @@
     let locationOrigin = null;
     let originMarker = null;
     let mapSummary = 'Loading restaurants…';
+    let matchedResults = [];
+    let resultsLimit = 30;
+    let mapBoundsFilter = null;
 
     const searchInput = document.getElementById('search');
     const status = document.getElementById('status');
@@ -342,6 +389,7 @@
     }
 
     function render() {
+      if (typeof clearDetailMarker === 'function') clearDetailMarker();
       group.clearLayers();
       const query = normalise(searchInput.value);
       const filters = Object.fromEntries(Object.keys(filterLabels).map(field => [field, document.getElementById(field).value]));
@@ -355,6 +403,8 @@
         const haystack = normalise([item.name, item.city, item.area, item.cuisine, item.priority].join(' '));
         if (Object.entries(filters).some(([field, selected]) => selected && !valuesFor(item, field).some(value => filterKey(value) === selected))) continue;
         if (query && !haystack.includes(query)) continue;
+        if (typeof matchesPersonal === 'function' && !matchesPersonal(item)) continue;
+        if (mapBoundsFilter && item.coords && typeof inMapBounds === 'function' && !inMapBounds(item.coords, mapBoundsFilter)) continue;
         const distance = locationOrigin && item.coords ? distanceMiles(locationOrigin, item.coords) : null;
         if (distance !== null && distance > Number(document.getElementById('radius').value || 10)) continue;
         visible += 1;
@@ -364,6 +414,7 @@
           continue;
         }
         const marker = L.marker([item.coords.lat, item.coords.lon], { title: item.name, alt: item.name }).bindPopup(popupHtml(item) + (distance === null ? '' : `<br>${distance.toFixed(1)} miles away (straight line)`));
+        if (typeof decorateMarker === 'function') decorateMarker(marker, item);
         group.addLayer(marker);
         nearby.push({ item, distance, marker });
       }
@@ -372,10 +423,13 @@
       list.replaceChildren();
       document.getElementById('nearby-results').hidden = false;
       document.getElementById('results-title').textContent = locationOrigin ? 'Nearby restaurants' : 'Explore restaurants';
-      document.getElementById('results-note').textContent = `Showing ${Math.min(30, nearby.length)} of ${nearby.length} matches · ${locationOrigin ? 'nearest first; unmapped entries follow' : 'A–Z'}`;
-      nearby.sort((a, b) => locationOrigin && a.distance !== b.distance
+      const sorted = typeof sortMatches === 'function' ? sortMatches(nearby) : nearby.sort((a, b) => locationOrigin && a.distance !== b.distance
         ? (a.distance ?? Infinity) - (b.distance ?? Infinity)
-        : a.item.name.localeCompare(b.item.name, 'en-GB')).slice(0, 30).forEach(({ item, distance, marker }) => {
+        : a.item.name.localeCompare(b.item.name, 'en-GB'));
+      matchedResults = sorted;
+      document.getElementById('results-note').textContent = `Showing ${Math.min(resultsLimit, sorted.length)} of ${sorted.length} matches${locationOrigin ? ' · distances are straight line; unmapped entries follow' : ''}${mapBoundsFilter ? ' · selected map area; unmapped entries included' : ''}`;
+      document.getElementById('load-more').hidden = resultsLimit >= sorted.length;
+      sorted.slice(0, resultsLimit).forEach(({ item, distance, marker }) => {
         const li = document.createElement('li');
         li.className = 'restaurant-card';
         li.innerHTML = popupHtml(item);
@@ -393,6 +447,19 @@
           note.className = 'unmapped-note';
           note.textContent = 'No valid coordinates in the sheet. Use the links above for venue details.';
           li.appendChild(note);
+        }
+        if (typeof personalSummary === 'function' && personalSummary(item)) {
+          const saved = document.createElement('p');
+          saved.className = 'saved-summary';
+          saved.textContent = personalSummary(item);
+          li.appendChild(saved);
+        }
+        if (typeof openDetails === 'function') {
+          const details = document.createElement('button');
+          details.type = 'button';
+          details.textContent = `Details & save: ${item.name}`;
+          details.addEventListener('click', () => openDetails(item));
+          li.appendChild(details);
         }
         list.appendChild(li);
       });
@@ -418,6 +485,7 @@
       data = items;
       latestLoadLabel = loadLabel;
       populateFilters();
+      if (typeof restoreSharedState === 'function') restoreSharedState();
       render();
       if (saveCache) {
         try {
@@ -513,6 +581,9 @@
     }
     document.getElementById('reset-filters').addEventListener('click', () => {
       searchInput.value = '';
+      resultsLimit = 30;
+      mapBoundsFilter = null;
+      if (typeof resetPersonalFilters === 'function') resetPersonalFilters();
       Object.keys(filterLabels).forEach(field => { document.getElementById(field).value = ''; });
       populateFilters();
       if (typeof clearLocation === 'function') clearLocation();
@@ -523,6 +594,7 @@
   </script>
   <script src="./navigation.js"></script>
   <script src="./location.js"></script>
+  <script src="./features.js"></script>
   <script src="./install.js"></script>
 </body>
 </html>

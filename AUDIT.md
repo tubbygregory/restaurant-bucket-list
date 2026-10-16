@@ -26,4 +26,8 @@ Scope: spreadsheet parsing and cached fallback; text/cuisine/price/city/area/pri
 - The 59 unmapped records need coordinate corrections in the source spreadsheet before they can participate in distance checks or appear as markers. They remain browsable and counted; no locations were invented.
 - Real iPhone/Android installation, VoiceOver/TalkBack and physical-device GPS accuracy still need device testing. Browser dimensions and simulated GPS do not establish those outcomes.
 - Fresh spreadsheet data, public Nominatim place search and map tiles need a connection. Offline data depends on a prior online visit and retained browser storage. Public geocoding remains intended for this personal site, not bulk traffic.
-- Multi-select filter chips, viewport-driven searching and pagination beyond the first 30 cards are potential follow-up improvements. Current text and category filters can narrow the complete record set.
+- Multi-select filter chips, viewport-driven searching and other advanced browsing controls are potential follow-up improvements. Current text and category filters can narrow the complete record set.
+
+## Feature follow-up
+
+Personal status/favourites/ratings/notes, a restaurant details view, shuffle, shareable public links, explicit viewport searching and configurable sorting/pagination are now implemented. The cache is v4, and the Node suite contains 17 tests. Both browser suites pass at phone, desktop and landscape dimensions; the feature suite verifies personal-data isolation in a separate recipient browser profile and offline personal persistence. Native OS share-sheet behaviour, physical-phone GPS and cross-device sync are not claimed as tested/implemented. Personal data is local only, with branch-identity and browser-storage limitations documented in README.md.
