@@ -4,7 +4,7 @@
   <meta charset="utf-8">
 
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="An interactive restaurant bucket-list map, updated from Google Sheets.">
   <meta name="theme-color" content="#164e43">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -77,39 +77,52 @@
     #update-app { margin-top: 10px; }
     @keyframes spin { to { transform: rotate(360deg); } }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; scroll-behavior: auto !important; } }
-    @media (max-width: 700px) {
-      body { display: flex; flex-direction: column; }
-      .panel { height: auto; max-height: 54dvh; flex-shrink: 0; padding: max(18px, env(safe-area-inset-top)) 18px 14px; border-right: 0; border-bottom: 1px solid var(--line); }
-      #map { flex: 1; min-height: 44dvh; }
-      h1 { max-width: none; font-size: 26px; }
-      .intro { margin: 8px 0 14px; }
-      .eyebrow { margin-bottom: 5px; }
+    body { height: 100dvh; overflow: hidden; display: grid; grid-template-columns: minmax(0,1fr); grid-template-rows: auto minmax(0,1fr) auto; }
+    .app-header { display: flex; align-items: center; gap: 12px; padding: max(12px, env(safe-area-inset-top)) 16px 12px; border-bottom: 1px solid var(--line); }
+    .app-header h1 { font-size: 21px; max-width: none; letter-spacing: -.4px; }
+    #view-caption { margin: 3px 0 0; font-size: 11px; color: var(--muted); }
+    .header-find { margin-left: auto; width: auto; font-size: 12px; }
+    .back-button { width: auto; white-space: nowrap; }
+    #map { grid-row: 2; min-height: 0; height: 100%; }
+    .panel { grid-row: 2; height: 100%; max-height: none; width: 100%; border: 0; padding: 16px max(18px, calc((100% - 640px) / 2)) 28px; overflow-y: auto; }
+    .view > h2 { font: 500 30px/1.2 Georgia, serif; margin: 18px 0 8px; }
+    h3 { font-size: 14px; margin: 24px 0 12px; }
+    .search-steps { display: flex; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+    .search-steps button { min-width: 0; font-size: 12px; padding: 8px; }
+    [aria-current="step"], .bottom-nav [aria-current="page"] { background: var(--ink); color: white; border-color: var(--ink); }
+    .bottom-nav { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 6px; padding: 8px 12px max(8px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--paper); }
+    .bottom-nav button { font-size: 12px; border-color: transparent; }
+    .continue-button { margin-top: 16px; }
+    #location-controls { margin-top: 26px; }
+    .restaurant-card { margin-top: 14px; padding: 18px; }
+    @media (max-width: 480px) {
+      .app-header { gap: 8px; padding-left: 12px; padding-right: 12px; }
+      .app-header h1 { font-size: 18px; }
+      .header-find { max-width: 100px; font-size: 11px; padding: 8px; }
+      .back-button { padding: 8px; font-size: 12px; }
+      .view > h2 { font-size: 28px; }
     }
   </style>
 </head>
 <body>
-  <aside class="panel" aria-label="Restaurant search and filters">
-    <header>
-      <p class="eyebrow">Good food. Worth the journey.</p>
-      <h1>Restaurant Bucket List</h1>
-      <p class="intro">Find your next great meal, close to home or further afield.</p>
-    </header>
+  <header class="app-header">
+    <button id="view-back" class="back-button" type="button" hidden>← Back</button>
+    <div><h1>Restaurant Bucket List</h1><p id="view-caption">Your next great meal</p></div>
+    <button type="button" class="header-find" data-view="find">Find a restaurant</button>
+  </header>
+  <main id="map" aria-label="Restaurant map"></main>
+  <main id="workspace" class="panel" hidden>
+    <nav id="search-steps" class="search-steps" aria-label="Restaurant search steps">
+      <button type="button" data-view="find">1. Find</button><button type="button" data-view="filters">2. Filters</button><button type="button" data-view="results">3. Results</button>
+    </nav>
+    <section id="view-find" class="view" hidden aria-labelledby="find-heading">
+      <h2 id="find-heading" tabindex="-1">Where are we eating?</h2>
+      <p class="intro">Search your list, choose a place, or see what’s near you.</p>
     <label class="search-label" for="search">Search your list</label>
     <input id="search" type="search" placeholder="Search restaurant, city or cuisine" autocomplete="off">
     <p id="match-summary" class="match-summary" aria-live="polite">Loading your restaurant list…</p>
-    <details id="filter-controls" open>
-      <summary>Filter your list <span id="filter-count"></span></summary>
-    <div class="filters-heading"><h2>Make it your kind of meal</h2><button id="reset-filters" class="text-button" type="button">Clear filters</button></div>
-    <div class="filter-grid">
-      <label for="cuisine">Cuisine<select id="cuisine"><option value="">All cuisines</option></select></label>
-      <label for="price">Price<select id="price"><option value="">All prices</option></select></label>
-      <label for="city">City / location<select id="city"><option value="">All locations</option></select></label>
-      <label for="area">Neighbourhood<select id="area"><option value="">All areas</option></select></label>
-      <label for="priority" class="filter-wide">Priority<select id="priority"><option value="">All priorities</option></select></label>
-    </div>
-    </details>
-    <details id="location-controls">
-      <summary>Find nearby · place or Near me</summary>
+    <div id="location-controls">
+      <h3>Or find somewhere nearby</h3>
       <form id="location-form">
         <label for="place">Town, city or postcode</label>
         <input id="place" type="search" placeholder="e.g. Milton Keynes or SW1A 1AA" required maxlength="160">
@@ -124,14 +137,38 @@
       <select id="radius"><option value="5">5 miles</option><option value="10" selected>10 miles</option><option value="25">25 miles</option><option value="50">50 miles</option></select>
       <div id="location-status" role="status" aria-live="polite"></div>
       <div class="location-credit">Place search: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a>. Only submitted place searches are sent to Nominatim. Your device location stays in this browser.</div>
-    </details>
-
+    </div>
+      <button type="button" class="primary continue-button" data-view="filters">Next: choose filters →</button>
+      <button type="button" class="continue-button" data-view="results">See all matches</button>
+    </section>
+    <section id="view-filters" class="view" hidden aria-labelledby="filters-heading">
+      <h2 id="filters-heading" tabindex="-1">What sounds good?</h2>
+      <p class="intro">Choose as much or as little as you like.</p>
+    <div id="filter-controls">
+      <p id="filter-count" class="muted"></p>
+    <div class="filters-heading"><h2>Make it your kind of meal</h2><button id="reset-filters" class="text-button" type="button">Clear filters</button></div>
+    <div class="filter-grid">
+      <label for="cuisine">Cuisine<select id="cuisine"><option value="">All cuisines</option></select></label>
+      <label for="price">Price<select id="price"><option value="">All prices</option></select></label>
+      <label for="city">City / location<select id="city"><option value="">All locations</option></select></label>
+      <label for="area">Neighbourhood<select id="area"><option value="">All areas</option></select></label>
+      <label for="priority" class="filter-wide">Priority<select id="priority"><option value="">All priorities</option></select></label>
+    </div>
+    </div>
+      <button type="button" class="primary continue-button" data-view="results">Show restaurants →</button>
+    </section>
+    <section id="view-results" class="view" hidden aria-labelledby="results-heading">
+      <h2 id="results-heading" tabindex="-1">Pick your next meal</h2>
+      <div class="actions"><button type="button" data-view="filters">Edit filters</button><button type="button" class="primary" data-view="map">View map</button></div>
+    <div id="empty-state" hidden>No restaurants match these filters. Try a different cuisine, a wider radius, or clear your filters.</div>
+    <div id="nearby-results"><h3 id="results-title">Explore restaurants</h3><p id="results-note"></p><ol id="nearby-list" class="nearby-list"></ol></div>
+    </section>
+    <section id="view-more" class="view" hidden aria-labelledby="more-heading">
+      <h2 id="more-heading" tabindex="-1">App &amp; data</h2>
     <div class="actions">
       <button id="refresh" type="button">Refresh data</button>
       <a class="sheet-link" href="https://docs.google.com/spreadsheets/d/18W5-PKVhFFDG4yvtG6pMZOXP_86XxnHjc4GsgIRrg3A/edit" target="_blank" rel="noopener">Open sheet</a>
     </div>
-    <div id="empty-state" hidden>No restaurants match these filters. Try a different cuisine, a wider radius, or clear your filters.</div>
-    <details id="nearby-results"><summary id="results-title">Explore restaurants</summary><p id="results-note"></p><ol id="nearby-list" class="nearby-list"></ol></details>
     <details><summary>Install this app</summary>
       <button id="install" type="button" hidden>Install app</button>
       <p class="muted" id="install-help">On iPhone or iPad, open in Safari, tap Share, then Add to Home Screen. On Android, use your browser’s Install app or Add to Home screen menu. Offline use needs a previous online visit; fresh data and map tiles need a connection.</p>
@@ -139,9 +176,14 @@
     <button id="update-app" type="button" class="primary" hidden>Update app</button>
     <div id="status" class="status loading" role="status" aria-live="polite">Loading Google Sheet…</div>
     <div class="muted">All restaurant details and marker coordinates come from the “Map Data” tab. Google Maps opens the venue search link stored in the sheet.</div>
-  </aside>
-  <main id="map" aria-label="Restaurant map"></main>
-
+    </section>
+  </main>
+  <nav class="bottom-nav" aria-label="Main navigation">
+    <button type="button" data-view="map">Map</button>
+    <button type="button" data-view="find">Find</button>
+    <button type="button" data-view="results">Results</button>
+    <button type="button" data-view="more">More</button>
+  </nav>
   <script src="./vendor/leaflet/leaflet.js"></script>
   <script src="./vendor/leaflet.markercluster/leaflet.markercluster.js"></script>
   <script>
@@ -173,14 +215,11 @@
     let loading = false;
     let locationOrigin = null;
     let originMarker = null;
+    let mapSummary = 'Loading restaurants…';
 
     const searchInput = document.getElementById('search');
     const status = document.getElementById('status');
     const refreshButton = document.getElementById('refresh');
-    if (typeof matchMedia !== 'undefined' && matchMedia('(max-width: 700px)').matches) {
-      document.getElementById('filter-controls').open = false;
-    }
-
     function normalise(value) {
       return String(value ?? '')
         .normalize('NFKD')
@@ -344,7 +383,10 @@
           const button = document.createElement('button');
           button.type = 'button';
           button.textContent = distance === null ? `Show ${item.name} on map` : `${item.name} · ${distance.toFixed(1)} miles`;
-          button.addEventListener('click', () => group.zoomToShowLayer(marker, () => marker.openPopup()));
+          button.addEventListener('click', () => {
+            if (typeof showView === 'function') showView('map');
+            group.zoomToShowLayer(marker, () => marker.openPopup());
+          });
           li.appendChild(button);
         } else {
           const note = document.createElement('p');
@@ -358,6 +400,8 @@
       document.getElementById('empty-state').hidden = visible !== 0 || !data.length;
       const mappedVisible = visible - unmapped;
       document.getElementById('match-summary').textContent = `${visible.toLocaleString('en-GB')} matches · ${mappedVisible.toLocaleString('en-GB')} on the map${unmapped ? ` · ${unmapped} without coordinates` : ''}`;
+      mapSummary = `${mappedVisible.toLocaleString('en-GB')} restaurants on the map`;
+      if (!document.getElementById('map').hidden) document.getElementById('view-caption').textContent = mapSummary;
       const totalMapped = data.filter(item => item.coords).length;
       const suffix = unmapped ? ` · ${unmapped} filtered result${unmapped === 1 ? '' : 's'} missing or invalid Latitude/Longitude` : '';
       status.className = loading ? 'status loading' : totalMapped && !loadError ? 'status' : 'status error';
@@ -477,6 +521,7 @@
     refreshButton.addEventListener('click', loadSheet);
     loadSheet();
   </script>
+  <script src="./navigation.js"></script>
   <script src="./location.js"></script>
   <script src="./install.js"></script>
 </body>

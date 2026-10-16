@@ -27,7 +27,7 @@ function focusLocation() {
   if (searchCircle) map.removeLayer(searchCircle);
   searchCircle = L.circle([locationOrigin.lat, locationOrigin.lon], { radius: Number(document.getElementById('radius').value || 10) * 1609.344, color: '#164e43', weight: 1, fillOpacity: 0.04 }).addTo(map);
   const bounds = searchCircle.getBounds();
-  map.fitBounds(bounds, { paddingTopLeft: [20, 20], paddingBottomRight: [20, 20], maxZoom: 14 });
+  if (!document.getElementById('map').hidden) map.fitBounds(bounds, { paddingTopLeft: [20, 20], paddingBottomRight: [20, 20], maxZoom: 14 });
 }
 
 // Explicit submissions only: no autocomplete or background geocoding.

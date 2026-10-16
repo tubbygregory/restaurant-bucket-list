@@ -4,7 +4,7 @@ Buildless static Leaflet map. Production: https://tubbygregory.github.io/restaur
 
 ## Source and deployment
 - `index.html` contains the application, styling and client-side data loader.
-- `.github/workflows/pages.yml` validates inline JavaScript and deploys `index.html`, location/install scripts, manifest, service worker, icons, vendored map assets and `.nojekyll` to GitHub Pages after pushes to `main` or a manual workflow dispatch.
+- `.github/workflows/pages.yml` validates inline JavaScript and deploys `index.html`, location/navigation/install scripts, manifest, service worker, icons, vendored map assets and `.nojekyll` to GitHub Pages after pushes to `main` or a manual workflow dispatch.
 - GitHub Pages is the production hosting target. The user enabled deployment after authorizing public repository visibility. Preserve GitHub Actions as the Pages source.
 - Netlify is the legacy host. Do not reconnect it or treat it as the deployment target. Do not delete the legacy site without a user request.
 - Do not commit secrets or credentials.
@@ -30,5 +30,5 @@ Buildless static Leaflet map. Production: https://tubbygregory.github.io/restaur
 ## Filters and visual layout
 - Filter options derive from spreadsheet/cache values. Preserve price currency symbols in comparisons; cuisine filters match slash-separated components. City changes update neighbourhood options. Preserve valid selections on refresh.
 - Restaurant cards include unmapped records and saved links. Do not hide or discard those entries because they cannot be placed on the map.
-- The sidebar is separate from the map on desktop, with expandable filters on mobile. Keep keyboard focus visible, reduced-motion support and map resize observation when changing layout.
+- `navigation.js` provides map-first navigation with separate Find, Filters, Results and More views on every screen size, modelled on the user’s Redways app. Preserve selections and browser Back support, keep inactive views hidden from focus/accessibility, and resize the map before opening a selected marker. Do not restore a simultaneous scrolling panel/map split.
 - PR jobs have read-only permissions; only main-branch deployment gets Pages/OIDC write permissions. Include external script syntax checks and regression tests in validation.

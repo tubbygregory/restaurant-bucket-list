@@ -1,6 +1,6 @@
 'use strict';
-const CACHE = 'restaurant-bucket-list-v2';
-const SHELL = ['./', './index.html', './location.js', './install.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-512.png', './icons/apple-touch-icon.png'];
+const CACHE = 'restaurant-bucket-list-v3';
+const SHELL = ['./', './index.html', './location.js', './navigation.js', './install.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-512.png', './icons/apple-touch-icon.png'];
 const ASSETS = [...SHELL, './vendor/leaflet/leaflet.css', './vendor/leaflet/leaflet.js',
   './vendor/leaflet/images/marker-icon.png', './vendor/leaflet/images/marker-icon-2x.png',
   './vendor/leaflet/images/marker-shadow.png', './vendor/leaflet/images/layers.png', './vendor/leaflet/images/layers-2x.png',
@@ -25,6 +25,7 @@ self.addEventListener('message', event => {
 });
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
+  url.hash = ''; // View navigation fragments must not bypass the offline shell.
   if (event.request.method !== 'GET') return;
   const local = url.origin === self.location.origin && ASSETS.some(path => new URL(path, self.registration.scope).href === url.href);
   if (!local) return; // Never cache JSONP, geocoding or map tiles.
