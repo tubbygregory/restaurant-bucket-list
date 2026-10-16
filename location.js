@@ -14,6 +14,8 @@ function setLocation(coords, label) {
     locationStatus.textContent = 'This location has invalid coordinates. Please try another location.';
     return;
   }
+  mapBoundsFilter = null;
+  document.getElementById('clear-map-area').hidden = true;
   locationOrigin = coords;
   if (originMarker) map.removeLayer(originMarker);
   originMarker = L.circleMarker([coords.lat, coords.lon], { radius: 8, color: '#164e43', fillOpacity: 0.8 }).addTo(map).bindPopup(escapeHtml(label));
