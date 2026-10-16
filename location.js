@@ -27,6 +27,11 @@ function setLocation(coords, label) {
 
 function focusLocation() {
   if (searchCircle) map.removeLayer(searchCircle);
+  if (document.getElementById('radius').value === 'all') {
+    searchCircle = null;
+    if (!document.getElementById('map').hidden) map.setView([locationOrigin.lat, locationOrigin.lon], 10);
+    return;
+  }
   searchCircle = L.circle([locationOrigin.lat, locationOrigin.lon], { radius: Number(document.getElementById('radius').value || 10) * 1609.344, color: '#164e43', weight: 1, fillOpacity: 0.04 }).addTo(map);
   const bounds = searchCircle.getBounds();
   if (!document.getElementById('map').hidden) map.fitBounds(bounds, { paddingTopLeft: [20, 20], paddingBottomRight: [20, 20], maxZoom: 14 });

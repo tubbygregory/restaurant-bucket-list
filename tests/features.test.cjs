@@ -42,3 +42,18 @@ test('copying links uses the clipboard and offers a manual fallback',async()=>{
  let selected=false;a.elements['share-link'].focus=()=>{};a.elements['share-link'].select=()=>selected=true;a.context.navigator.clipboard.writeText=async()=>{throw Error('blocked')};
  await a.run("copyLink(byId('share-link'),byId('share-message'))");assert.equal(selected,true);assert.match(a.elements['share-message'].textContent,/copy this link/);
 });
+
+test('every sorting category supports both directions and keeps missing data last',()=>{
+ const a=features();a.context.entries=[
+ {item:{name:'Alpha',price:'£',priority:'A',cuisine:'British',city:'Bath',area:'Centre'},distance:1},
+ {item:{name:'Zulu',price:'£££',priority:'C',cuisine:'Thai',city:'York',area:'West'},distance:8},
+ {item:{name:'Missing',price:'N/A',priority:'',cuisine:'',city:'',area:''},distance:null}
+ ];a.run('locationOrigin={lat:51,lon:0}');
+ for(const mode of ['price','priority','nearest','cuisine','city','area']){
+  a.elements['sort-results'].value=mode;a.run("byId('sort-direction').value='asc'");assert.equal(a.run("sortMatches(entries).map(e=>e.item.name).join(',')"),'Alpha,Zulu,Missing',mode+' ascending');
+  a.elements['sort-direction'].value='desc';assert.equal(a.run("sortMatches(entries).map(e=>e.item.name).join(',')"),'Zulu,Alpha,Missing',mode+' descending');
+ }
+ a.elements['sort-results'].value='name';assert.equal(a.run("sortMatches(entries).map(e=>e.item.name).join(',')"),'Zulu,Missing,Alpha');
+ a.elements['sort-direction'].value='asc';assert.equal(a.run("sortMatches(entries).map(e=>e.item.name).join(',')"),'Alpha,Missing,Zulu');
+ a.elements['sort-direction'].value='desc';assert.equal(a.run('shortlistState(false).direction'),'desc');
+});

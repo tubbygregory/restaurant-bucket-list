@@ -47,17 +47,30 @@ function sortMatches(matches) {
     byId('sort-results').value = 'auto';
     byId('discovery-message').textContent = 'Choose a place or use Near me to sort by distance.';
   }
-  const nearest = mode === 'nearest' || (mode === 'auto' && locationOrigin);
-  const price = item => /^£{1,4}$/.test(item.price) ? item.price.length : Infinity;
-  const priority = item => item.priority || '\uffff';
+  const field = mode === 'auto' ? (locationOrigin ? 'nearest' : 'name') : mode;
+  const direction = byId('sort-direction').value === 'desc' ? -1 : 1;
+  const labels = byId('sort-direction').options;
+  if (labels) {
+    const words = field === 'price' ? ['low to high', 'high to low'] : field === 'nearest' ? ['nearest first', 'farthest first'] : ['A–Z', 'Z–A'];
+    labels[0].textContent = `Ascending · ${words[0]}`;
+    labels[1].textContent = `Descending · ${words[1]}`;
+  }
+  const value = entry => {
+    if (field === 'nearest') return Number.isFinite(entry.distance) ? entry.distance : null;
+    if (field === 'price') return /^£{1,4}$/.test(entry.item.price) ? entry.item.price.length : null;
+    const text = String(entry.item[field] || '').trim();
+    return text || null;
+  };
   return matches.sort((a, b) => {
-    let difference = 0;
-    if (nearest) difference = (a.distance ?? Infinity) - (b.distance ?? Infinity);
-    if (mode === 'price') difference = price(a.item) - price(b.item);
-    if (mode === 'priority') difference = priority(a.item).localeCompare(priority(b.item), 'en-GB');
-    return (Number.isNaN(difference) ? 0 : difference) || a.item.name.localeCompare(b.item.name, 'en-GB');
+    const left = value(a), right = value(b);
+    // Unknown prices/coordinates/categories remain last, even for descending order.
+    if (left === null && right !== null) return 1;
+    if (right === null && left !== null) return -1;
+    const difference = left === null ? 0 : typeof left === 'number' ? left - right : left.localeCompare(right, 'en-GB', { sensitivity: 'base', numeric: true });
+    return direction * difference || a.item.name.localeCompare(b.item.name, 'en-GB');
   });
 }
+
 function personalSummary(item) {
   const value = personalFor(item);
   return [value.favourite ? '♥ Favourite' : '', value.status === 'visited' ? 'Visited' : value.status === 'want' ? 'Want to go' : '', value.rating ? `★ ${value.rating}/5` : ''].filter(Boolean).join(' · ');
@@ -142,7 +155,7 @@ byId('personal-form').addEventListener('submit', event => {
 byId('details-map').addEventListener('click', () => showRestaurantMap(selectedRestaurant));
 byId('pick-restaurant').addEventListener('click', pickRestaurant);
 byId('shuffle-restaurant').addEventListener('click', pickRestaurant);
-for (const id of ['personal-status', 'favourites-only', 'sort-results']) byId(id).addEventListener('change', () => {
+for (const id of ['personal-status', 'favourites-only', 'sort-results', 'sort-direction']) byId(id).addEventListener('change', () => {
   resultsLimit = 30;
   if (id === 'sort-results' && byId(id).value === 'nearest' && !locationOrigin) {
     byId('discovery-message').textContent = 'Choose a place or use Near me in Find to sort by distance.';
@@ -173,7 +186,7 @@ byId('clear-map-area').addEventListener('click', () => { mapBoundsFilter = null;
 
 function shortlistState(includeLocation) {
   const filters = Object.fromEntries(Object.keys(filterLabels).map(field => [field, byId(field).value]));
-  const state = { q: searchInput.value.slice(0, 160), filters, sort: byId('sort-results').value };
+  const state = { q: searchInput.value.slice(0, 160), filters, sort: byId('sort-results').value, direction: byId('sort-direction').value || 'asc' };
   if (includeLocation && locationOrigin) { state.origin = { lat: locationOrigin.lat, lon: locationOrigin.lon }; state.radius = byId('radius').value; }
   if (includeLocation && mapBoundsFilter) state.bounds = mapBoundsFilter;
   return state;
@@ -237,9 +250,10 @@ function restoreSharedState() {
       for (const field of Object.keys(filterLabels)) byId(field).value = typeof state.filters?.[field] === 'string' ? state.filters[field].slice(0, 512) : '';
       populateFilters();
       if (Object.keys(filterLabels).some(field => typeof state.filters?.[field] === 'string' && state.filters[field] && byId(field).value !== state.filters[field])) byId('discovery-message').textContent = 'Some shared filters no longer exist in the sheet. Please check the filters shown here.';
-      byId('sort-results').value = ['auto', 'name', 'nearest', 'priority', 'price'].includes(state.sort) ? state.sort : 'auto';
+      byId('sort-results').value = ['auto', 'name', 'nearest', 'priority', 'price', 'cuisine', 'city', 'area'].includes(state.sort) ? state.sort : 'auto';
+      byId('sort-direction').value = state.direction === 'desc' ? 'desc' : 'asc';
       if (state.origin && typeof state.origin.lat === 'number' && typeof state.origin.lon === 'number' && resolveCoordinates({ latitude: state.origin.lat, longitude: state.origin.lon })) {
-        byId('radius').value = ['5', '10', '25', '50'].includes(state.radius) ? state.radius : '10';
+        byId('radius').value = ['5', '10', '25', '50', 'all'].includes(state.radius) ? state.radius : '10';
         setLocation(state.origin, 'shared location');
       }
       const b = state.bounds;
