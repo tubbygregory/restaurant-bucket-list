@@ -1,0 +1,4 @@
+[build]
+  publish = "."
+
+# Buildless static site. Netlify deploys the main branch automatically.
