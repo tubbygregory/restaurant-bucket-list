@@ -9,7 +9,7 @@ function app(){
   const layers=[];
   const group={clearLayers(){layers.length=0;},addLayer(m){layers.push(m);}};
   const storage=new Map();
-  const context={console,URL,Option:function(){},Date,setTimeout:()=>1,clearTimeout(){},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},document:{getElementById:id=>elements[id]??=element(),createElement:element,head:{appendChild(){}}},L:{map:()=>({setView(){return this;},addLayer(){},removeLayer(){}}),tileLayer:()=>({addTo(){}}),markerClusterGroup:()=>group,marker:coords=>({coords,bindPopup(html){this.html=html;return this;}})}};
+  const context={console,URL,Option:function(){},Date,setTimeout:()=>1,clearTimeout(){},localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},document:{getElementById:id=>elements[id]??=element(),createElement:element,head:{appendChild(){}}},L:{map:()=>({setView(){return this;},addLayer(){},removeLayer(){},fitBounds(){}}),tileLayer:()=>({addTo(){}}),markerClusterGroup:()=>group,marker:coords=>({coords,bindPopup(html){this.html=html;return this;}})}};
   context.window=context;vm.createContext(context);vm.runInContext(source,context);
   return {context,elements,layers,storage,run:code=>vm.runInContext(code,context)};
 }
@@ -64,6 +64,7 @@ test('place lookup, permission denial and clearing location',async()=>{
  a.context.URLSearchParams=URLSearchParams;
  a.context.navigator={geolocation:{getCurrentPosition(success,failure){failure({code:1});}}};
  a.context.fetch=async url=>{assert.equal(url.hostname,'nominatim.openstreetmap.org');assert.equal(url.searchParams.get('q'),'London');return {ok:true,json:async()=>[{display_name:'London <test>',lat:'51.5',lon:'-0.1'}]};};
+ a.context.L.circle=()=>({getBounds(){return [];}});
  a.context.L.circleMarker=()=>({addTo(){return this;},bindPopup(){return this;}});
  a.run(fs.readFileSync('location.js','utf8'));
  a.run("document.getElementById('place').value='London'");await a.elements['location-form'].handlers.submit({preventDefault(){}});

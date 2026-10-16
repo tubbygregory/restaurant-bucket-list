@@ -16,10 +16,15 @@ function setLocation(coords, label) {
   locationOrigin = coords;
   if (originMarker) map.removeLayer(originMarker);
   originMarker = L.circleMarker([coords.lat, coords.lon], { radius: 8, color: '#164e43', fillOpacity: 0.8 }).addTo(map).bindPopup(escapeHtml(label));
-  map.setView([coords.lat, coords.lon], 12);
+  focusLocation();
   locationStatus.textContent = `Near ${label}. Distances are straight line, not travel distances. Records without coordinates cannot be checked for proximity and remain counted below.`;
   document.getElementById('clear-location').hidden = false;
   render();
+}
+
+function focusLocation() {
+  const bounds = L.circle([locationOrigin.lat, locationOrigin.lon], { radius: Number(document.getElementById('radius').value || 10) * 1609.344 }).getBounds();
+  map.fitBounds(bounds, { paddingTopLeft: [window.innerWidth > 600 ? 400 : 20, 20], paddingBottomRight: [20, 20], maxZoom: 14 });
 }
 
 // Explicit submissions only: no autocomplete or background geocoding.
@@ -85,7 +90,10 @@ nearMe.addEventListener('click', () => {
   }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 });
 });
 
-document.getElementById('radius').addEventListener('change', render);
+document.getElementById('radius').addEventListener('change', () => {
+  if (locationOrigin) focusLocation();
+  render();
+});
 document.getElementById('clear-location').addEventListener('click', () => {
   ++locationRequest;
   locationOrigin = null;

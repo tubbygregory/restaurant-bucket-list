@@ -30,7 +30,7 @@ self.addEventListener('fetch', event => {
     try {
       const response = await fetch(event.request);
       if (!response.ok && response.type !== 'opaque') throw new Error('Network response failed');
-      await cache.put(event.request, response.clone());
+      await cache.put(event.request, response.clone()).catch(() => {});
       return response;
     } catch (error) {
       const cached = await cache.match(event.request);
