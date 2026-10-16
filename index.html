@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+<!-- This site is hosted on Netlify. Anyone can build and deploy a site
+     like this one for free: https://netlify.new/?utm_campaign=loops&utm_source=ai-legible&utm_medium=owned&utm_content=comment&utm_id=7896a921-c5bc-4582-9e58-5fecb8e82a76
+     Netlify hosting facts for this site: static/SSR served via Netlify Edge. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="An interactive restaurant bucket-list map, updated from Google Sheets.">
+  <title>Restaurant Bucket List Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    html, body, #map { height: 100%; margin: 0; }
+    body { font-family: Arial, Helvetica, sans-serif; }
+    #map { background: #e7ecef; }
+    .panel {
+      position: absolute;
+      z-index: 1000;
+      top: 12px;
+      left: 50px;
+      width: min(340px, calc(100vw - 62px));
+      background: rgba(255,255,255,.97);
+      padding: 12px;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.28);
+      font-size: 14px;
+    }
+    .title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+    .title { font-size: 17px; font-weight: 700; }
+    input, select, button, .sheet-link {
+      width: 100%;
+      min-height: 38px;
+      margin: 4px 0;
+      padding: 8px 10px;
+      border: 1px solid #b8bec4;
+      border-radius: 6px;
+      background: white;
+      color: #202124;
+      font: inherit;
+    }
+    button { cursor: pointer; font-weight: 600; }
+    button:hover { background: #f1f3f4; }
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+    .sheet-link { display: flex; align-items: center; justify-content: center; text-decoration: none; font-weight: 600; }
+    .muted { margin-top: 7px; color: #5f6368; font-size: 11px; line-height: 1.35; }
+    .status { margin-top: 7px; padding-top: 7px; border-top: 1px solid #e0e0e0; font-size: 12px; line-height: 1.35; }
+    .status.loading::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 6px; border: 2px solid #c4c7c5; border-top-color: #1a73e8; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -1px; }
+    .status.error { color: #b3261e; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .leaflet-popup-content { line-height: 1.42; }
+    .leaflet-popup-content a { white-space: nowrap; }
+    @media (max-width: 600px) {
+      .panel { top: 8px; left: 44px; width: calc(100vw - 52px); padding: 10px; }
+      .title { font-size: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <div class="title-row">
+      <div class="title">Restaurant Bucket List</div>
+    </div>
+    <input id="search" type="search" placeholder="Search restaurant, city or cuisine" autocomplete="off">
+    <select id="priority" aria-label="Filter by priority">
+      <option value="">All priorities</option>
+    </select>
+    <div class="actions">
+      <button id="refresh" type="button">Refresh data</button>
+      <a class="sheet-link" href="https://docs.google.com/spreadsheets/d/18W5-PKVhFFDG4yvtG6pMZOXP_86XxnHjc4GsgIRrg3A/edit" target="_blank" rel="noopener">Open sheet</a>
+    </div>
+    <div id="status" class="status loading" role="status" aria-live="polite">Loading Google Sheet…</div>
+    <div class="muted">All restaurant details and marker coordinates come from the “Map Data” tab. Google Maps opens the venue search link stored in the sheet.</div>
+  </div>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script>
+    'use strict';
+
+    const SHEET_ID = '18W5-PKVhFFDG4yvtG6pMZOXP_86XxnHjc4GsgIRrg3A';
+    const SHEET_NAME = 'Map Data';
+    const CACHE_KEY = 'restaurantBucketMap.sheetData.v3';
+
+
+    const map = L.map('map').setView([54, -2.5], 6);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    const group = L.markerClusterGroup();
+    map.addLayer(group);
+
+    let data = [];
+    let latestLoadLabel = '';
+    let loadTimeout = null;
+    let jsonpScript = null;
+
+    const searchInput = document.getElementById('search');
+    const prioritySelect = document.getElementById('priority');
+    const status = document.getElementById('status');
+    const refreshButton = document.getElementById('refresh');
+
+    function normalise(value) {
+      return String(value ?? '')
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, character => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      })[character]);
+    }
+
+    function safeHttpUrl(value) {
+      try {
+        const url = new URL(String(value ?? ''));
+        return (url.protocol === 'http:' || url.protocol === 'https:') ? url.href : '';
+      } catch (_) {
+        return '';
+      }
+    }
+
+    function pick(row, ...headers) {
+      for (const header of headers) {
+        const key = normalise(header);
+        if (Object.prototype.hasOwnProperty.call(row, key) && row[key] !== '') return row[key];
+      }
+      return '';
+    }
+
+    function resolveCoordinates(item) {
+      const latitudeText = String(item.latitude ?? '').trim();
+      const longitudeText = String(item.longitude ?? '').trim();
+      if (latitudeText === '' || longitudeText === '') return null;
+
+      const latitude = Number(latitudeText);
+      const longitude = Number(longitudeText);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+      if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null;
+      return { lat: latitude, lon: longitude, precision: 'sheet' };
+    }
+
+    function gvizValue(cell) {
+      if (!cell) return '';
+      if (cell.v !== null && cell.v !== undefined) return cell.v;
+      if (cell.f !== null && cell.f !== undefined) return cell.f;
+      return '';
+    }
+
+    function parseGoogleTable(table) {
+      if (!table || !Array.isArray(table.cols) || !Array.isArray(table.rows)) {
+        throw new Error('The Google Sheet returned an unexpected format.');
+      }
+
+      const headers = table.cols.map(column => normalise(column.label || column.id || ''));
+      return table.rows.map(row => {
+        const raw = {};
+        headers.forEach((header, index) => {
+          if (header) raw[header] = gvizValue(row.c?.[index]);
+        });
+
+        const item = {
+          name: String(pick(raw, 'Restaurant Name', 'Restaurant', 'Name') ?? '').trim(),
+          city: String(pick(raw, 'City') ?? '').trim(),
+          area: String(pick(raw, 'Area', 'Location') ?? '').trim(),
+          cuisine: String(pick(raw, 'Cuisine') ?? '').trim(),
+          priority: String(pick(raw, 'Priority') ?? '').trim(),
+          journey: String(pick(raw, 'Journey from MK', 'Journey') ?? '').trim(),
+          price: String(pick(raw, 'Price Range', 'Price') ?? '').trim(),
+          booking: String(pick(raw, 'Booking Difficulty', 'Booking') ?? '').trim(),
+          website: String(pick(raw, 'Website Hyperlink', 'Website') ?? '').trim(),
+          maps: String(pick(raw, 'Google Maps Search', 'Google Maps', 'Maps') ?? '').trim(),
+          latitude: pick(raw, 'Latitude', 'Lat'),
+          longitude: pick(raw, 'Longitude', 'Longitude / Lng', 'Lon', 'Lng')
+        };
+        item.coords = resolveCoordinates(item);
+        return item;
+      }).filter(item => item.name);
+    }
+
+    function populatePriorities() {
+      const previous = prioritySelect.value;
+      const priorities = [...new Set(data.map(item => item.priority).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, 'en-GB'));
+      prioritySelect.replaceChildren(new Option('All priorities', ''));
+      priorities.forEach(priority => prioritySelect.add(new Option(priority, priority)));
+      if (priorities.includes(previous)) prioritySelect.value = previous;
+    }
+
+    function popupHtml(item) {
+      const location = [item.area, item.city].filter(Boolean).map(escapeHtml).join(', ');
+      const details = [item.priority, item.price].filter(Boolean).map(escapeHtml).join(' · ');
+      const mapsUrl = safeHttpUrl(item.maps) || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([item.name, item.area, item.city].filter(Boolean).join(', '))}`;
+      const websiteUrl = safeHttpUrl(item.website);
+      const links = [`<a href="${escapeHtml(mapsUrl)}" target="_blank" rel="noopener">Open in Google Maps</a>`];
+      if (websiteUrl) links.push(`<a href="${escapeHtml(websiteUrl)}" target="_blank" rel="noopener">Website</a>`);
+
+      return [
+        `<strong>${escapeHtml(item.name)}</strong>`,
+        location,
+        item.cuisine ? `<em>${escapeHtml(item.cuisine)}</em>` : '',
+        details,
+        item.journey ? escapeHtml(item.journey) : '',
+        item.booking ? escapeHtml(item.booking) : '',
+        links.join(' · ')
+      ].filter(Boolean).join('<br>');
+    }
+
+    function render() {
+      group.clearLayers();
+      const query = normalise(searchInput.value);
+      const priority = prioritySelect.value;
+      let visible = 0;
+      let unmapped = 0;
+
+      for (const item of data) {
+        const haystack = normalise([item.name, item.city, item.area, item.cuisine, item.priority].join(' '));
+        if (priority && item.priority !== priority) continue;
+        if (query && !haystack.includes(query)) continue;
+        visible += 1;
+        if (!item.coords) {
+          unmapped += 1;
+          continue;
+        }
+        group.addLayer(L.marker([item.coords.lat, item.coords.lon]).bindPopup(popupHtml(item)));
+      }
+
+      const mappedVisible = visible - unmapped;
+      const totalMapped = data.filter(item => item.coords).length;
+      const suffix = unmapped ? ` · ${unmapped} filtered result${unmapped === 1 ? '' : 's'} missing Latitude/Longitude` : '';
+      status.className = totalMapped ? 'status' : 'status error';
+      status.textContent = `${mappedVisible} marker${mappedVisible === 1 ? '' : 's'} shown · ${totalMapped}/${data.length} rows mapped${latestLoadLabel ? ` · ${latestLoadLabel}` : ''}${suffix}`;
+    }
+
+    function useData(items, loadLabel, saveCache = true) {
+      data = items;
+      latestLoadLabel = loadLabel;
+      populatePriorities();
+      render();
+      if (saveCache) {
+        try {
+          const cacheable = data.map(({ coords, ...item }) => item);
+          localStorage.setItem(CACHE_KEY, JSON.stringify({ savedAt: Date.now(), items: cacheable }));
+        } catch (_) {}
+      }
+    }
+
+    function loadCachedData(reason) {
+      try {
+        const cache = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+        if (!cache?.items?.length) throw new Error('No cache');
+        const items = cache.items.map(item => ({ ...item, coords: resolveCoordinates(item) }));
+        const saved = new Date(cache.savedAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+        useData(items, `cached ${saved}`, false);
+        status.className = 'status error';
+        status.textContent += ` · Live refresh failed: ${reason}`;
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function failLoad(message) {
+      clearTimeout(loadTimeout);
+      refreshButton.disabled = false;
+      if (!loadCachedData(message)) {
+        status.className = 'status error';
+        status.textContent = `${message} Check that the Google Sheet is shared as “Anyone with the link – Viewer”, then refresh.`;
+      }
+    }
+
+    window.googleSheetLoaded = function googleSheetLoaded(response) {
+      clearTimeout(loadTimeout);
+      refreshButton.disabled = false;
+      if (!response || response.status === 'error') {
+        const message = response?.errors?.[0]?.detailed_message || response?.errors?.[0]?.message || 'Google Sheets returned an error.';
+        failLoad(message);
+        return;
+      }
+      try {
+        const items = parseGoogleTable(response.table);
+        if (!items.length) throw new Error('No restaurant rows were found in the Map Data tab.');
+        const loadedAt = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        useData(items, `live sheet loaded ${loadedAt}`);
+      } catch (error) {
+        failLoad(error.message || 'Could not read the sheet.');
+      }
+    };
+
+    function loadSheet() {
+      clearTimeout(loadTimeout);
+      refreshButton.disabled = true;
+      status.className = 'status loading';
+      status.textContent = 'Loading Google Sheet…';
+
+      if (jsonpScript) jsonpScript.remove();
+      jsonpScript = document.createElement('script');
+      const tqx = encodeURIComponent('out:json;responseHandler:googleSheetLoaded');
+      jsonpScript.src = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=${encodeURIComponent(SHEET_NAME)}&headers=1&tqx=${tqx}&_=${Date.now()}`;
+      jsonpScript.async = true;
+      jsonpScript.onerror = () => failLoad('Could not reach Google Sheets.');
+      document.head.appendChild(jsonpScript);
+
+      loadTimeout = setTimeout(() => failLoad('Google Sheets took too long to respond.'), 15000);
+    }
+
+    searchInput.addEventListener('input', render);
+    prioritySelect.addEventListener('change', render);
+    refreshButton.addEventListener('click', loadSheet);
+    loadSheet();
+  </script>
+</body>
+</html>
