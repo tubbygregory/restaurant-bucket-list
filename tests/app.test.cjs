@@ -5,7 +5,7 @@ const fs=require('node:fs');
 const source=[...fs.readFileSync('index.html','utf8').matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]).join('\n');
 function app(){
   const elements={};
-  const element=()=>({value:'',textContent:'',className:'',children:[],addEventListener(type,handler){(this.handlers??={})[type]=handler;},replaceChildren(){this.children=[];},appendChild(child){this.children.push(child);},add(){},remove(){}});
+  const element=()=>({value:'',textContent:'',className:'',children:[],addEventListener(type,handler){(this.handlers??={})[type]=handler;},replaceChildren(){this.children=[];this.value='';this.textContent='';},appendChild(child){this.children.push(child);},add(){},remove(){}});
   const layers=[];
   const group={clearLayers(){layers.length=0;},addLayer(m){layers.push(m);}};
   const storage=new Map();
@@ -19,7 +19,7 @@ test('parsing, missing coordinates, filtering and safe popup links',()=>{
  assert.equal(a.layers.length,1);assert.match(a.elements.status.textContent,/1\/2 rows mapped/);
  assert.match(a.layers[0].html,/&lt;img/);assert.doesNotMatch(a.layers[0].html,/href="javascript:/);assert.match(a.layers[0].html,/https:\/\/maps.google.com/);
  a.elements.search.value='cafe';a.run('render()');assert.equal(a.layers.length,1);
- a.elements.search.value='';a.elements.priority.value='Low';a.run('render()');assert.equal(a.layers.length,0);assert.match(a.elements.status.textContent,/1 filtered result/);
+ a.elements.search.value='';a.elements.priority.value=JSON.stringify('low');a.run('render()');assert.equal(a.layers.length,0);assert.match(a.elements.status.textContent,/1 filtered result/);
  for(const [latitude,longitude] of [['',0],[91,0],[0,181],['NaN',0],['0x33',0]])assert.equal(a.run(`resolveCoordinates(${JSON.stringify({latitude,longitude})})`),null);
  assert.equal(a.run('resolveCoordinates({latitude:0,longitude:0}).lat'),0);
 });
@@ -50,11 +50,11 @@ test('nearby radius filters and sorts mapped records without hiding unmapped cou
  a.run("locationOrigin={lat:51.5,lon:-0.1}; document.getElementById('radius').value='10'");
  a.context.googleSheetLoaded1({table});
  assert.equal(a.layers.length,1);
- assert.equal(a.elements['nearby-list'].children.length,1);
+ assert.equal(a.elements['nearby-list'].children.length,2);
  assert.match(a.elements['nearby-list'].children[0].children[0].textContent,/0.0 miles/);
  assert.match(a.elements.status.textContent,/missing or invalid/);
  a.run('locationOrigin={lat:55,lon:0}; render()');assert.equal(a.layers.length,0);
- assert.match(a.elements['nearby-list'].textContent,/No mapped restaurants/);
+ assert.equal(a.elements['nearby-list'].children.length,1);assert.match(a.elements['nearby-list'].children[0].children[0].textContent,/No valid coordinates/);
  assert.ok(Math.abs(a.run('distanceMiles({lat:0,lon:0},{lat:0,lon:1})')-69.09)<0.1);
 });
 
@@ -85,4 +85,42 @@ test('manifest assets and service-worker cache stay within repository subpath',(
  vm.createContext(context);vm.runInContext(fs.readFileSync('sw.js','utf8'),context);
  let pending;listeners.install({waitUntil:p=>pending=p});
  return pending.then(()=>{assert.ok(added.length>10);for(const path of added){assert.ok(fs.existsSync(path));assert.ok(new URL(path,base).pathname.startsWith('/restaurant-bucket-list/'));}});
+});
+
+
+test('cuisine tokens, currency price, city and area filters combine and survive refresh',()=>{
+ const a=app();
+ const filteredTable={cols:['Name','City','Area','Cuisine','Price Range','Priority','Latitude','Longitude'].map(label=>({label})),rows:[
+ ['Ramen venue','London','Soho','Japanese / Ramen','££','A',51.5,0],
+ ['Sushi venue','London','Mayfair','Japanese','£££','B',51.51,0],
+ ['Pizza venue','York','Centre','Italian / Pizza','££','A',53.9,0],
+ ['Unknown venue','York','','','','B','','']
+ ].map(values=>({c:values.map(v=>({v}))}))};
+ a.context.googleSheetLoaded1({table:filteredTable});
+ a.run("document.getElementById('cuisine').value=filterKey('Japanese'); document.getElementById('price').value=filterKey('££'); document.getElementById('city').value=filterKey('London'); document.getElementById('area').value=filterKey('Soho'); render()");
+ assert.equal(a.layers.length,1);assert.match(a.layers[0].html,/Ramen venue/);
+ a.run('populateFilters(); render()');assert.equal(a.layers.length,1);
+ a.run("document.getElementById('city').value=filterKey('York'); populateFilters(); render()");
+ assert.equal(a.elements.area.value,'');assert.equal(a.layers.length,0);assert.equal(a.elements['empty-state'].hidden,false);
+ a.elements['reset-filters'].handlers.click();assert.equal(a.layers.length,3);
+ a.run("document.getElementById('price').value=filterKey('');render()");assert.equal(a.elements['nearby-list'].children.length,1);assert.match(a.elements['nearby-list'].children[0].innerHTML,/Unknown venue/);
+});
+
+test('international search and external links with embedded credentials',()=>{
+ const a=app();assert.equal(a.run("normalise('東京 Café')"),'東京 cafe');assert.equal(a.run("safeHttpUrl('https://example.com@evil.example/')"),'');
+});
+
+test('app update is explicit for existing installs and does not reload a first install',async()=>{
+ for(const controlled of [false,true]){
+  const a=app();const events={};const workerEvents={};let posted=null;let reloaded=0;
+  const registration={waiting:{postMessage:message=>posted=message},addEventListener(){}};
+  a.context.addEventListener=(name,handler)=>events[name]=handler;
+  a.context.location={reload:()=>reloaded++};
+  a.context.navigator={serviceWorker:{controller:controlled?{}:null,register:async()=>registration,addEventListener:(name,handler)=>workerEvents[name]=handler}};
+  a.run("document.getElementById('update-app').hidden=true");
+  a.run(fs.readFileSync('install.js','utf8'));events.load();await Promise.resolve();await Promise.resolve();
+  assert.equal(a.elements['update-app'].hidden,!controlled);
+  if(controlled){a.elements['update-app'].onclick();assert.equal(posted.type,'SKIP_WAITING');}
+  workerEvents.controllerchange();workerEvents.controllerchange();assert.equal(reloaded,controlled?1:0);
+ }
 });

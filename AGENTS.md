@@ -26,3 +26,9 @@ Buildless static Leaflet map. Production: https://tubbygregory.github.io/restaur
 - `manifest.webmanifest`, `install.js`, `sw.js` and `icons/` support installation. All paths and service-worker scope must work under `/restaurant-bucket-list/`.
 - Map libraries are pinned local distribution files in `vendor/`, with licenses. Bump the cache version in `sw.js` whenever app-shell assets change. Do not cache spreadsheet JSONP, geocoding responses or tiles in the service worker.
 - Run `node --test tests/*.test.cjs`. With Playwright/Chromium available, serve `/workspace` on port 8001 and run `node tests/browser.cjs` from the checkout. The browser tests use fixture data and verify place search, geolocation, layout, manifest and offline reload; distinguish them from live-service checks.
+
+## Filters and visual layout
+- Filter options derive from spreadsheet/cache values. Preserve price currency symbols in comparisons; cuisine filters match slash-separated components. City changes update neighbourhood options. Preserve valid selections on refresh.
+- Restaurant cards include unmapped records and saved links. Do not hide or discard those entries because they cannot be placed on the map.
+- The sidebar is separate from the map on desktop, with expandable filters on mobile. Keep keyboard focus visible, reduced-motion support and map resize observation when changing layout.
+- PR jobs have read-only permissions; only main-branch deployment gets Pages/OIDC write permissions. Include external script syntax checks and regression tests in validation.

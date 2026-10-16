@@ -4,11 +4,11 @@ const { chromium } = require('playwright');
 const assert = require('node:assert/strict');
 const base = process.env.APP_URL || 'http://127.0.0.1:8001/restaurant-bucket-list/';
 const table = {
-  cols: ['Name', 'City', 'Priority', 'Latitude', 'Longitude', 'Google Maps'].map(label => ({ label })),
+  cols: ['Name', 'City', 'Priority', 'Latitude', 'Longitude', 'Google Maps', 'Cuisine', 'Price Range', 'Area'].map(label => ({ label })),
   rows: [
-    ['Near venue', 'London', 'High', 51.5, -0.1, 'https://maps.google.com/?q=near'],
-    ['Far venue', 'York', 'Low', 53.96, -1.08, 'https://maps.google.com/?q=far'],
-    ['Unmapped venue', 'London', 'High', '', '', 'https://maps.google.com/?q=unmapped']
+    ['Near venue', 'London', 'High', 51.5, -0.1, 'https://maps.google.com/?q=near', 'Japanese / Ramen', '££', 'Soho'],
+    ['Far venue', 'York', 'Low', 53.96, -1.08, 'https://maps.google.com/?q=far', 'Italian', '£££', 'Centre'],
+    ['Unmapped venue', 'London', 'High', '', '', 'https://maps.google.com/?q=unmapped', 'Japanese', '££', 'Soho']
   ].map(values => ({ c: values.map(v => ({ v })) }))
 };
 (async () => {
@@ -20,7 +20,7 @@ const table = {
       const errors = [];
       page.on('pageerror', error => errors.push(error.message));
       let offline = false;
-      await page.route('https://*.tile.openstreetmap.org/**', route => route.abort());
+      await page.route('https://tile.openstreetmap.org/**', route => route.abort());
       await page.route('https://docs.google.com/**', route => {
         if (offline) return route.abort();
         const callback = new URL(route.request().url()).searchParams.get('tqx').split('responseHandler:')[1];
@@ -32,6 +32,26 @@ const table = {
       });
       await page.goto(base);
       await page.waitForFunction(() => document.querySelector('#status').textContent.includes('live sheet loaded'));
+      if (process.env.AXE_PATH) {
+        await page.addScriptTag({ path: process.env.AXE_PATH });
+        await page.evaluate(() => document.querySelectorAll('details').forEach(node => node.open = true));
+        const audit = await page.evaluate(async () => axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] } }));
+        if (audit.violations.length) console.log(JSON.stringify(audit.violations.map(({ id, nodes }) => ({ id, nodes: nodes.map(({ target, failureSummary }) => ({ target, failureSummary })) })), null, 2));
+        assert.deepEqual(audit.violations.map(({ id, nodes }) => ({ id, count: nodes.length })), []);
+      }
+      await page.evaluate(() => document.querySelectorAll('details').forEach(node => node.open = node.id === 'filter-controls' && innerWidth > 700));
+      await page.screenshot({ path: `/tmp/restaurant-audit/initial-${viewport.width}.png` });
+      await page.locator('#filter-controls').evaluate(node => node.open = true);
+      await page.locator('#cuisine').selectOption({ label: 'Japanese' });
+      await page.locator('#price').selectOption({ label: '££' });
+      await page.locator('#city').selectOption({ label: 'London' });
+      await page.locator('#area').selectOption({ label: 'Soho' });
+      assert.match(await page.locator('#status').innerText(), /1 marker shown/);
+      await page.locator('#city').selectOption({ label: 'York' });
+      await page.waitForFunction(() => !document.querySelector('#empty-state').hidden);
+      assert.equal(await page.locator('#area').inputValue(), '');
+      await page.locator('#reset-filters').click();
+      assert.match(await page.locator('#status').innerText(), /2 markers shown/);
       const cdp = await context.newCDPSession(page);
       const manifest = await cdp.send('Page.getAppManifest');
       assert.equal(manifest.errors.length, 0);
@@ -41,7 +61,7 @@ const table = {
       await page.locator('#find-place').click();
       await page.getByRole('button', { name: 'London, England', exact: true }).click();
       await page.waitForFunction(() => document.querySelector('#location-status').textContent.includes('Near London'));
-      assert.equal(await page.locator('#nearby-list li').count(), 1);
+      assert.equal(await page.locator('#nearby-list li').count(), 2);
       assert.match(await page.locator('#status').innerText(), /1 marker shown/);
       await page.locator('#nearby-results').evaluate(node => node.open = true);
       await page.getByRole('button', { name: 'Near venue · 0.0 miles' }).click();
@@ -50,14 +70,15 @@ const table = {
       assert.match(await page.locator('#status').innerText(), /2 markers shown/);
       await page.locator('#near-me').click();
       await page.waitForFunction(() => document.querySelector('#location-status').textContent.includes('Near your location'));
-      assert.equal(await page.locator('#nearby-list li').count(), 1);
+      assert.equal(await page.locator('#nearby-list li').count(), 2);
       await page.locator('#search').fill('absent');
-      assert.match(await page.locator('#nearby-list').innerText(), /No mapped restaurants/);
+      assert.match(await page.locator('#nearby-list').innerText(), /No restaurants/);
       await page.locator('#search').fill('');
       const layout = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, map: document.querySelector('#map').getBoundingClientRect().toJSON(), panel: document.querySelector('.panel').getBoundingClientRect().toJSON() }));
       assert.ok(layout.width <= viewport.width);
       assert.ok(layout.map.height >= viewport.height * .4);
-      if (viewport.width <= 600) assert.ok(layout.map.top >= layout.panel.bottom);
+      if (viewport.width <= 700) assert.ok(layout.map.top >= layout.panel.bottom);
+      await page.screenshot({ path: `/tmp/restaurant-audit/redesign-${viewport.width}.png` });
       await page.evaluate(() => navigator.serviceWorker.ready);
       await page.reload();
       await page.waitForFunction(() => navigator.serviceWorker.controller);
@@ -68,7 +89,7 @@ const table = {
       await page.waitForFunction(() => document.querySelector('#status').textContent.includes('cached'));
       assert.match(await page.locator('#status').innerText(), /2\/3 rows mapped/);
       assert.deepEqual(errors, []);
-      console.log(`PASS ${viewport.width}×${viewport.height}: place search, near me, popup, layout, manifest, offline reload`);
+      console.log(`PASS ${viewport.width}×${viewport.height}: combined filters, place search, near me, popup, layout, manifest, offline reload`);
       await context.close();
     }
   } finally { await browser.close(); }
